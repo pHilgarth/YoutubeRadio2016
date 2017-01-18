@@ -179,6 +179,7 @@ namespace YoutubeRadio2016
                 trackItem.ForeColor = Color.DarkBlue;
                 trackItem.Font = new Font(trackItem.Font, FontStyle.Bold);
 
+                cmdPlay.Image = pauseImage;
                 UpdateTrackbar();                
                 PlayTrack(currentTrack);
             }
@@ -241,6 +242,8 @@ namespace YoutubeRadio2016
         }
         private void frmMain_FormClosing(object sender, FormClosingEventArgs e)
         {
+            settings.Volume = volume;
+
             Settings.SerializeSettingsAndPlaylist(settings, allAudioTracks);
         }
         private void frmMain_Load(object sender, EventArgs e)
@@ -493,6 +496,8 @@ namespace YoutubeRadio2016
                     chkShuffle.Checked = true;
                 }
             }
+
+            volSlider.Volume = settings.Volume;
         }
         private void CmdPlay_CurrentTrackIsNotNull()
         {
@@ -736,13 +741,13 @@ namespace YoutubeRadio2016
 
             if (playbackState == PlaybackState.Playing)
             {
-                cmdPlay.Image = pauseImage;
+                cmdPlay.Image = playImage;
                 player.WaveOut.Pause();
                 tmrPlayTrack.Stop();
             }
             else if (playbackState == PlaybackState.Paused)
             {
-                cmdPlay.Image = playImage;
+                cmdPlay.Image = pauseImage;
                 player.WaveOut.Play();
                 tmrPlayTrack.Start();
             }
@@ -882,7 +887,8 @@ namespace YoutubeRadio2016
             {
                 player.WaveOut.Stop();
             }
-            
+
+            cmdPlay.Image = playImage;
             tmrPlayTrack.Stop();
             trkBDuration.Maximum = 0;
             lblTrackDuration.Text = "00:00:00";
