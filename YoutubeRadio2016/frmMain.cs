@@ -389,8 +389,6 @@ namespace YoutubeRadio2016
             }
             else if(!trackBarSeeking)
             {
-                Debug.WriteLine("Current: {0}", player.MediaReader.CurrentTime.TotalSeconds);
-                Debug.WriteLine("Total: {0}", player.MediaReader.TotalTime.TotalSeconds);
                 TimeSpan trackPosition = player.MediaReader.CurrentTime;
                 var trackPositionSeconds = (int)trackPosition.TotalSeconds;
                 string posString = trackPosition.ToString(@"hh\:mm\:ss");
