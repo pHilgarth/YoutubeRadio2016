@@ -179,9 +179,9 @@ namespace YoutubeRadio2016
                 trackItem.ForeColor = Color.DarkBlue;
                 trackItem.Font = new Font(trackItem.Font, FontStyle.Bold);
 
-                cmdPlay.Image = pauseImage;
-                UpdateTrackbar();                
+                UpdateTrackbar();
                 PlayTrack(currentTrack);
+                cmdPlay.Image = pauseImage;
             }
 
             if (settings.Autoplay)
@@ -402,6 +402,31 @@ namespace YoutubeRadio2016
                 lblTrackPos.Text = posString;
             }
         }
+        private void trkBDuration_MouseDown(object sender, MouseEventArgs e)
+        {
+            trackBarSeeking = true;
+
+            GetMousePositionTrackbar(e.X);
+        }
+        private void trkBDuration_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (trackBarSeeking)
+            {
+                GetMousePositionTrackbar(e.X);
+            }
+        }
+        private void trkBDuration_MouseUp(object sender, MouseEventArgs e)
+        {
+            player.MediaReader.CurrentTime = TimeSpan.FromSeconds(trkBDuration.Value);
+
+            trackBarSeeking = false;
+        }
+        private void trkBDuration_ValueChanged(object sender, EventArgs e)
+        {
+            TimeSpan position = TimeSpan.FromSeconds(trkBDuration.Value);
+
+            lblTrackPos.Text = position.ToString("T");
+        }
         private void txtUrl_Enter(object sender, EventArgs e)
         {
             AcceptButton = cmdAddTracks;
@@ -513,7 +538,7 @@ namespace YoutubeRadio2016
                 }
 
                 UpdateTrackbar();
-                PlayTrack(currentTrack);                
+                PlayTrack(currentTrack);                               
             }
         }
         private void CmdPlay_Click_CurrentTrackIsNull()
@@ -766,6 +791,7 @@ namespace YoutubeRadio2016
                 player.PlayTrack(trackToPlay, mute, volume);
                 tmrPlayTrack.Start();
                 cmdStop.Enabled = true;
+                cmdPlay.Image = pauseImage;
             }
             catch (Exception ex)
             {
@@ -930,34 +956,6 @@ namespace YoutubeRadio2016
             string videoUrl = "https://www.youtube.com" + videoID;
 
             return videoUrl;
-        }
-
-
-        //trackbar seeking, not working properly
-        private void trkBDuration_MouseDown(object sender, MouseEventArgs e)
-        {
-            trackBarSeeking = true;
-
-            GetMousePositionTrackbar(e.X);
-        }
-        private void trkBDuration_MouseMove(object sender, MouseEventArgs e)
-        {
-            if (trackBarSeeking)
-            {
-                GetMousePositionTrackbar(e.X);
-            }
-        }
-        private void trkBDuration_MouseUp(object sender, MouseEventArgs e)
-        {
-            player.MediaReader.CurrentTime = TimeSpan.FromSeconds(trkBDuration.Value);
-
-            trackBarSeeking = false;
-        }
-        private void trkBDuration_ValueChanged(object sender, EventArgs e)
-        {
-            TimeSpan position = TimeSpan.FromSeconds(trkBDuration.Value);
-
-            lblTrackPos.Text = position.ToString("T");
-        }
+        }        
     }
 }
