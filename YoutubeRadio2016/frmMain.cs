@@ -170,9 +170,7 @@ namespace YoutubeRadio2016
             }
             else
             {
-                CmdPlay_Click_CurrentTrackIsNull();
-
-                currentTrack = player.CurrentTrack;
+                CmdPlay_Click_CurrentTrackIsNull();                
 
                 ListViewItem trackItem = lstVTracks.Items[currentTrack.IndexSortedList];
 
@@ -298,6 +296,13 @@ namespace YoutubeRadio2016
                 if (waveOut != null)
                 {
                     waveOut.Stop();
+                }
+
+                if(currentTrack != null && !currentTrack.IsAutoplayTrack)
+                {
+                    int lastIndex = lstVTracks.Items.Count - 1;
+
+                    CheckAutoplaySettings(lastIndex);
                 }
 
                 ChangeToSelectedTrack();
@@ -442,6 +447,7 @@ namespace YoutubeRadio2016
             if (!mute)
             {
                 volume = volSlider.Volume;
+                settings.Volume = volume;
 
                 if (waveOut != null)
                 {
@@ -466,6 +472,8 @@ namespace YoutubeRadio2016
                     }
                 }
             }
+
+            lblTrackPos.Text = "settings.Volume: " + settings.Volume.ToString();
         }
 
         private void AddTracks(string videoUrl, bool autoplayTrack = false)
@@ -490,7 +498,7 @@ namespace YoutubeRadio2016
             {
                 cmdPlay.Enabled = true;
 
-                if (lstVTracks.Items.Count > 1)
+                if (lstVTracks.Items.Count > 1 && currentTrack != null)
                 {
                     cmdPreviousTrack.Enabled = true;
                     cmdNextTrack.Enabled = true;
@@ -522,7 +530,10 @@ namespace YoutubeRadio2016
                 }
             }
 
-            volSlider.Volume = settings.Volume;
+            if (!mute)
+            {
+                volSlider.Volume = settings.Volume;
+            }
         }
         private void CmdPlay_CurrentTrackIsNotNull()
         {
@@ -546,6 +557,7 @@ namespace YoutubeRadio2016
             if (selectedTrack != null)
             {
                 player.CurrentTrack = selectedTrack;
+                currentTrack = player.CurrentTrack;
                 lstVTracks.Items[selectedTrack.IndexSortedList].Selected = false;
                 selectedTrack = null;
             }
@@ -553,10 +565,10 @@ namespace YoutubeRadio2016
             {
                 GetPlaylistsFirstTrack();
 
-                UpdateButtons();
-
                 cmdStop.Enabled = true;
             }
+
+            UpdateButtons();
         }
         private void ChangeToSelectedTrack()
         {
@@ -634,30 +646,34 @@ namespace YoutubeRadio2016
                 StopPlayback();
             }
         }        
+        private void CheckAutoplaySettings(int lastIndex)
+        {
+            if (settings.AutoplaySettings == AutoplaySettings.Play && currentTrack.IsAutoplayTrack)
+            {
+                RemoveTrack(currentTrack);
+
+                lastIndex--;
+            }
+            else
+            {
+                string title = currentTrack.Title;
+                TimeSpan duration = TimeSpan.FromTicks(currentTrack.Duration);
+                string durationString = duration.ToString("T");
+                string[] subItems = { title, durationString };
+
+                lstVTracks.Items.RemoveAt(lastIndex);
+                lstVTracks.Items.Add(new ListViewItem(subItems));
+
+                currentTrack.IsAutoplayTrack = false;
+            }
+        }
         private void DoAutoplayOperations()
         {
             try
             {
                 int lastIndex = lstVTracks.Items.Count - 1;
 
-                if (settings.AutoplaySettings == AutoplaySettings.Play && currentTrack.IsAutoplayTrack)
-                {
-                    RemoveTrack(currentTrack);
-
-                    lastIndex--;
-                }
-                else
-                {
-                    string title = currentTrack.Title;
-                    TimeSpan duration = TimeSpan.FromTicks(currentTrack.Duration);
-                    string durationString = duration.ToString("T");
-                    string[] subItems = { title, durationString };
-
-                    lstVTracks.Items.RemoveAt(lastIndex);
-                    lstVTracks.Items.Add(new ListViewItem(subItems));
-
-                    currentTrack.IsAutoplayTrack = false;
-                }
+                CheckAutoplaySettings(lastIndex);
 
                 AddTracks(videoURLAutoplayTrack, true);
 
@@ -725,10 +741,12 @@ namespace YoutubeRadio2016
 
                 player.GetRandomTrack(ref trackToPlay);
                 player.CurrentTrack = trackToPlay;
+                currentTrack = player.CurrentTrack;
             }
             else
             {
                 player.CurrentTrack = allAudioTracks[0];
+                currentTrack = player.CurrentTrack;
             }
         }        
         private void LoadTracks(string videoUrl, bool autoplayTrack)
@@ -924,7 +942,7 @@ namespace YoutubeRadio2016
         }
         private void UpdateButtons()
         {
-            if (lstVTracks.Items.Count == 1)
+            if (lstVTracks.Items.Count == 1 || currentTrack == null)
             {
                 cmdPreviousTrack.Enabled = false;
                 cmdNextTrack.Enabled = false;
@@ -932,7 +950,7 @@ namespace YoutubeRadio2016
             else
             {
                 cmdPreviousTrack.Enabled = true;
-                cmdNextTrack.Enabled = true;
+                cmdNextTrack.Enabled = true;                
             }
         }
         private void UpdateTrackbar()
