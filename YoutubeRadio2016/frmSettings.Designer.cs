@@ -29,9 +29,9 @@
         private void InitializeComponent()
         {
             this.grpAutoplay = new System.Windows.Forms.GroupBox();
-            this.optAutoplayOff = new System.Windows.Forms.RadioButton();
-            this.optAutoplayLoad = new System.Windows.Forms.RadioButton();
-            this.optAutoplayPlay = new System.Windows.Forms.RadioButton();
+            this.optAutoplay_Off = new System.Windows.Forms.RadioButton();
+            this.optAutoplay_Load = new System.Windows.Forms.RadioButton();
+            this.optAutoplay_Play = new System.Windows.Forms.RadioButton();
             this.grpRepeat = new System.Windows.Forms.GroupBox();
             this.optRepeatOff = new System.Windows.Forms.RadioButton();
             this.optRepeatOne = new System.Windows.Forms.RadioButton();
@@ -53,9 +53,9 @@
             // 
             // grpAutoplay
             // 
-            this.grpAutoplay.Controls.Add(this.optAutoplayOff);
-            this.grpAutoplay.Controls.Add(this.optAutoplayLoad);
-            this.grpAutoplay.Controls.Add(this.optAutoplayPlay);
+            this.grpAutoplay.Controls.Add(this.optAutoplay_Off);
+            this.grpAutoplay.Controls.Add(this.optAutoplay_Load);
+            this.grpAutoplay.Controls.Add(this.optAutoplay_Play);
             this.grpAutoplay.Location = new System.Drawing.Point(15, 30);
             this.grpAutoplay.Name = "grpAutoplay";
             this.grpAutoplay.Size = new System.Drawing.Size(129, 90);
@@ -63,40 +63,40 @@
             this.grpAutoplay.TabStop = false;
             this.grpAutoplay.Text = "Autoplay";
             // 
-            // optAutoplayOff
+            // optAutoplay_Off
             // 
-            this.optAutoplayOff.AutoSize = true;
-            this.optAutoplayOff.Checked = true;
-            this.optAutoplayOff.Location = new System.Drawing.Point(8, 60);
-            this.optAutoplayOff.Name = "optAutoplayOff";
-            this.optAutoplayOff.Size = new System.Drawing.Size(43, 17);
-            this.optAutoplayOff.TabIndex = 2;
-            this.optAutoplayOff.TabStop = true;
-            this.optAutoplayOff.Text = "Aus";
-            this.optAutoplayOff.UseVisualStyleBackColor = true;
-            this.optAutoplayOff.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
+            this.optAutoplay_Off.AutoSize = true;
+            this.optAutoplay_Off.Checked = true;
+            this.optAutoplay_Off.Location = new System.Drawing.Point(8, 60);
+            this.optAutoplay_Off.Name = "optAutoplay_Off";
+            this.optAutoplay_Off.Size = new System.Drawing.Size(43, 17);
+            this.optAutoplay_Off.TabIndex = 2;
+            this.optAutoplay_Off.TabStop = true;
+            this.optAutoplay_Off.Text = "Aus";
+            this.optAutoplay_Off.UseVisualStyleBackColor = true;
+            this.optAutoplay_Off.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
             // 
-            // optAutoplayLoad
+            // optAutoplay_Load
             // 
-            this.optAutoplayLoad.AutoSize = true;
-            this.optAutoplayLoad.Location = new System.Drawing.Point(8, 37);
-            this.optAutoplayLoad.Name = "optAutoplayLoad";
-            this.optAutoplayLoad.Size = new System.Drawing.Size(115, 17);
-            this.optAutoplayLoad.TabIndex = 1;
-            this.optAutoplayLoad.Text = "In die Playlist laden";
-            this.optAutoplayLoad.UseVisualStyleBackColor = true;
-            this.optAutoplayLoad.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
+            this.optAutoplay_Load.AutoSize = true;
+            this.optAutoplay_Load.Location = new System.Drawing.Point(8, 37);
+            this.optAutoplay_Load.Name = "optAutoplay_Load";
+            this.optAutoplay_Load.Size = new System.Drawing.Size(115, 17);
+            this.optAutoplay_Load.TabIndex = 1;
+            this.optAutoplay_Load.Text = "In die Playlist laden";
+            this.optAutoplay_Load.UseVisualStyleBackColor = true;
+            this.optAutoplay_Load.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
             // 
-            // optAutoplayPlay
+            // optAutoplay_Play
             // 
-            this.optAutoplayPlay.AutoSize = true;
-            this.optAutoplayPlay.Location = new System.Drawing.Point(8, 14);
-            this.optAutoplayPlay.Name = "optAutoplayPlay";
-            this.optAutoplayPlay.Size = new System.Drawing.Size(90, 17);
-            this.optAutoplayPlay.TabIndex = 0;
-            this.optAutoplayPlay.Text = "Nur abspielen";
-            this.optAutoplayPlay.UseVisualStyleBackColor = true;
-            this.optAutoplayPlay.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
+            this.optAutoplay_Play.AutoSize = true;
+            this.optAutoplay_Play.Location = new System.Drawing.Point(8, 14);
+            this.optAutoplay_Play.Name = "optAutoplay_Play";
+            this.optAutoplay_Play.Size = new System.Drawing.Size(90, 17);
+            this.optAutoplay_Play.TabIndex = 0;
+            this.optAutoplay_Play.Text = "Nur abspielen";
+            this.optAutoplay_Play.UseVisualStyleBackColor = true;
+            this.optAutoplay_Play.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
             // 
             // grpRepeat
             // 
@@ -263,9 +263,9 @@
         #endregion
 
         private System.Windows.Forms.GroupBox grpAutoplay;
-        private System.Windows.Forms.RadioButton optAutoplayOff;
-        private System.Windows.Forms.RadioButton optAutoplayLoad;
-        private System.Windows.Forms.RadioButton optAutoplayPlay;
+        private System.Windows.Forms.RadioButton optAutoplay_Off;
+        private System.Windows.Forms.RadioButton optAutoplay_Load;
+        private System.Windows.Forms.RadioButton optAutoplay_Play;
         private System.Windows.Forms.GroupBox grpRepeat;
         private System.Windows.Forms.RadioButton optRepeatOff;
         private System.Windows.Forms.RadioButton optRepeatOne;

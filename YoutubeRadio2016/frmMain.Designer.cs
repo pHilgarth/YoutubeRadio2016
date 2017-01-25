@@ -50,7 +50,6 @@
             this.cmdClearList = new System.Windows.Forms.Button();
             this.volSlider = new NAudio.Gui.VolumeSlider();
             this.cmdMute = new System.Windows.Forms.Button();
-            this.chkAutoplay = new System.Windows.Forms.CheckBox();
             this.lblNextSong = new System.Windows.Forms.Label();
             this.cmdPlayAutoplayTrack = new System.Windows.Forms.Button();
             this.tlTipPlayImmediately = new System.Windows.Forms.ToolTip(this.components);
@@ -64,9 +63,14 @@
             this.optRepeatOne = new System.Windows.Forms.RadioButton();
             this.optRepeatAll = new System.Windows.Forms.RadioButton();
             this.prgLoadTracks = new System.Windows.Forms.ProgressBar();
+            this.grpAutoplay = new System.Windows.Forms.GroupBox();
+            this.optAutoplay_Off = new System.Windows.Forms.RadioButton();
+            this.optAutoplay_Load = new System.Windows.Forms.RadioButton();
+            this.optAutoplay_Play = new System.Windows.Forms.RadioButton();
             ((System.ComponentModel.ISupportInitialize)(this.trkBDuration)).BeginInit();
             this.mnuStrip.SuspendLayout();
             this.grpRepeat.SuspendLayout();
+            this.grpAutoplay.SuspendLayout();
             this.SuspendLayout();
             // 
             // lstVTracks
@@ -225,7 +229,7 @@
             // chkShuffle
             // 
             this.chkShuffle.AutoSize = true;
-            this.chkShuffle.Location = new System.Drawing.Point(118, 659);
+            this.chkShuffle.Location = new System.Drawing.Point(264, 739);
             this.chkShuffle.Name = "chkShuffle";
             this.chkShuffle.Size = new System.Drawing.Size(112, 17);
             this.chkShuffle.TabIndex = 6;
@@ -276,25 +280,14 @@
             this.cmdMute.UseVisualStyleBackColor = true;
             this.cmdMute.Click += new System.EventHandler(this.cmdMute_Click);
             // 
-            // chkAutoplay
-            // 
-            this.chkAutoplay.AutoSize = true;
-            this.chkAutoplay.Location = new System.Drawing.Point(118, 701);
-            this.chkAutoplay.Name = "chkAutoplay";
-            this.chkAutoplay.Size = new System.Drawing.Size(67, 17);
-            this.chkAutoplay.TabIndex = 22;
-            this.chkAutoplay.Text = "Autoplay";
-            this.chkAutoplay.UseVisualStyleBackColor = true;
-            this.chkAutoplay.CheckedChanged += new System.EventHandler(this.chkAutoplay_CheckedChanged);
-            // 
             // lblNextSong
             // 
             this.lblNextSong.AutoEllipsis = true;
             this.lblNextSong.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             this.lblNextSong.Font = new System.Drawing.Font("Microsoft Sans Serif", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblNextSong.Location = new System.Drawing.Point(144, 739);
+            this.lblNextSong.Location = new System.Drawing.Point(41, 832);
             this.lblNextSong.Name = "lblNextSong";
-            this.lblNextSong.Size = new System.Drawing.Size(720, 18);
+            this.lblNextSong.Size = new System.Drawing.Size(841, 18);
             this.lblNextSong.TabIndex = 23;
             this.lblNextSong.Text = "Nächster Song:";
             this.lblNextSong.UseMnemonic = false;
@@ -304,7 +297,7 @@
             // 
             this.cmdPlayAutoplayTrack.Font = new System.Drawing.Font("Mistral", 20.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.cmdPlayAutoplayTrack.Image = ((System.Drawing.Image)(resources.GetObject("cmdPlayAutoplayTrack.Image")));
-            this.cmdPlayAutoplayTrack.Location = new System.Drawing.Point(118, 735);
+            this.cmdPlayAutoplayTrack.Location = new System.Drawing.Point(15, 832);
             this.cmdPlayAutoplayTrack.Name = "cmdPlayAutoplayTrack";
             this.cmdPlayAutoplayTrack.Size = new System.Drawing.Size(20, 22);
             this.cmdPlayAutoplayTrack.TabIndex = 24;
@@ -364,7 +357,7 @@
             this.grpRepeat.Controls.Add(this.optRepeatOff);
             this.grpRepeat.Controls.Add(this.optRepeatOne);
             this.grpRepeat.Controls.Add(this.optRepeatAll);
-            this.grpRepeat.Location = new System.Drawing.Point(15, 655);
+            this.grpRepeat.Location = new System.Drawing.Point(15, 720);
             this.grpRepeat.Name = "grpRepeat";
             this.grpRepeat.Size = new System.Drawing.Size(83, 100);
             this.grpRepeat.TabIndex = 26;
@@ -416,18 +409,67 @@
             this.prgLoadTracks.TabIndex = 29;
             this.prgLoadTracks.Visible = false;
             // 
+            // grpAutoplay
+            // 
+            this.grpAutoplay.Controls.Add(this.optAutoplay_Off);
+            this.grpAutoplay.Controls.Add(this.optAutoplay_Load);
+            this.grpAutoplay.Controls.Add(this.optAutoplay_Play);
+            this.grpAutoplay.Location = new System.Drawing.Point(118, 720);
+            this.grpAutoplay.Name = "grpAutoplay";
+            this.grpAutoplay.Size = new System.Drawing.Size(129, 100);
+            this.grpAutoplay.TabIndex = 27;
+            this.grpAutoplay.TabStop = false;
+            this.grpAutoplay.Text = "Autoplay";
+            // 
+            // optAutoplay_Off
+            // 
+            this.optAutoplay_Off.AutoSize = true;
+            this.optAutoplay_Off.Checked = true;
+            this.optAutoplay_Off.Location = new System.Drawing.Point(17, 65);
+            this.optAutoplay_Off.Name = "optAutoplay_Off";
+            this.optAutoplay_Off.Size = new System.Drawing.Size(43, 17);
+            this.optAutoplay_Off.TabIndex = 2;
+            this.optAutoplay_Off.TabStop = true;
+            this.optAutoplay_Off.Text = "Aus";
+            this.optAutoplay_Off.UseVisualStyleBackColor = true;
+            this.optAutoplay_Off.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
+            // 
+            // optAutoplay_Load
+            // 
+            this.optAutoplay_Load.AutoSize = true;
+            this.optAutoplay_Load.Location = new System.Drawing.Point(17, 42);
+            this.optAutoplay_Load.Name = "optAutoplay_Load";
+            this.optAutoplay_Load.Size = new System.Drawing.Size(105, 17);
+            this.optAutoplay_Load.TabIndex = 1;
+            this.optAutoplay_Load.TabStop = true;
+            this.optAutoplay_Load.Text = "In die Liste laden";
+            this.optAutoplay_Load.UseVisualStyleBackColor = true;
+            this.optAutoplay_Load.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
+            // 
+            // optAutoplay_Play
+            // 
+            this.optAutoplay_Play.AutoSize = true;
+            this.optAutoplay_Play.Location = new System.Drawing.Point(17, 19);
+            this.optAutoplay_Play.Name = "optAutoplay_Play";
+            this.optAutoplay_Play.Size = new System.Drawing.Size(90, 17);
+            this.optAutoplay_Play.TabIndex = 0;
+            this.optAutoplay_Play.TabStop = true;
+            this.optAutoplay_Play.Text = "Nur abspielen";
+            this.optAutoplay_Play.UseVisualStyleBackColor = true;
+            this.optAutoplay_Play.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(882, 772);
+            this.ClientSize = new System.Drawing.Size(882, 866);
+            this.Controls.Add(this.grpAutoplay);
             this.Controls.Add(this.prgLoadTracks);
             this.Controls.Add(this.cmdYoutubeView);
             this.Controls.Add(this.grpRepeat);
             this.Controls.Add(this.lblTrackPos);
             this.Controls.Add(this.cmdPlayAutoplayTrack);
             this.Controls.Add(this.lblNextSong);
-            this.Controls.Add(this.chkAutoplay);
             this.Controls.Add(this.cmdMute);
             this.Controls.Add(this.volSlider);
             this.Controls.Add(this.cmdClearList);
@@ -456,6 +498,8 @@
             this.mnuStrip.PerformLayout();
             this.grpRepeat.ResumeLayout(false);
             this.grpRepeat.PerformLayout();
+            this.grpAutoplay.ResumeLayout(false);
+            this.grpAutoplay.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -483,7 +527,6 @@
         private System.Windows.Forms.Button cmdClearList;
         private NAudio.Gui.VolumeSlider volSlider;
         private System.Windows.Forms.Button cmdMute;
-        private System.Windows.Forms.CheckBox chkAutoplay;
         private System.Windows.Forms.Label lblNextSong;
         private System.Windows.Forms.Button cmdPlayAutoplayTrack;
         private System.Windows.Forms.ToolTip tlTipPlayImmediately;
@@ -497,6 +540,10 @@
         private System.Windows.Forms.RadioButton optRepeatAll;
         private System.Windows.Forms.Button cmdYoutubeView;
         private System.Windows.Forms.ProgressBar prgLoadTracks;
+        private System.Windows.Forms.GroupBox grpAutoplay;
+        private System.Windows.Forms.RadioButton optAutoplay_Off;
+        private System.Windows.Forms.RadioButton optAutoplay_Load;
+        private System.Windows.Forms.RadioButton optAutoplay_Play;
     }
 }
 

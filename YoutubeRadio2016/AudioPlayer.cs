@@ -211,13 +211,13 @@ namespace YoutubeRadio2016
         }
         private void PreviousTrack_Shuffle(ref AudioTrack previousTrack, AudioTrack selectedTrack)
         {
-            int trackIndex;
+            int trackIndex = 0;
 
             if (selectedTrack != null)
             {
                 trackIndex = selectedTrack.IndexShuffledList;
             }
-            else
+            else if(CurrentTrack != null)
             {
                 trackIndex = CurrentTrack.IndexShuffledList;
             }
@@ -235,14 +235,14 @@ namespace YoutubeRadio2016
         }
         private void PreviousTrack_Sorted(ref AudioTrack previousTrack, AudioTrack selectedTrack)
         {
-            int trackIndex;
+            int trackIndex = 0;
             int lastIndexAllTracks = AllAudioTracks.Count - 1;
 
             if (selectedTrack != null)
             {
                 trackIndex = selectedTrack.IndexSortedList;
             }
-            else
+            else if (CurrentTrack != null)
             {
                 trackIndex = CurrentTrack.IndexSortedList;
             }

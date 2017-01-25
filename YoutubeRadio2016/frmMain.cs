@@ -9,7 +9,7 @@ using System.Windows.Forms;
 
 namespace YoutubeRadio2016
 {
-    public enum AutoplaySettings { Play, Load }
+    public enum Autoplay { Play, Load, Off }
     public enum Repeat { RepeatOne, RepeatAll, RepeatOff }
     public enum NextSongConditions { ShuffleRepeatOne, ShuffleRepeatAll, ShuffleOnly, RepeatOne, RepeatAll, Default }
 
@@ -36,34 +36,13 @@ namespace YoutubeRadio2016
             InitializeComponent();
         }
 
-        private void chkAutoplay_CheckedChanged(object sender, EventArgs e)
-        {
-            if(chkAutoplay.Checked)
-            {
-                settings.Autoplay = true;
-
-                chkShuffle.Checked = false;
-                optRepeatOff.Checked = true;
-
-                if(player.WaveOut != null)
-                {
-                    ShowAutoplayPreview();
-                }
-            }
-            else
-            {
-                settings.Autoplay = false;
-                lblNextSong.Visible = false;
-                cmdPlayAutoplayTrack.Visible = false;
-            }
-        }
         private void chkShuffle_CheckedChanged(object sender, EventArgs e)
         {
             if (chkShuffle.Checked)
             {
                 settings.Shuffle = true;
 
-                chkAutoplay.Checked = false;
+                optAutoplay_Off.Checked = true;
 
                 if(optRepeatOne.Checked)
                 {
@@ -182,7 +161,7 @@ namespace YoutubeRadio2016
                 cmdPlay.Image = pauseImage;
             }
 
-            if (settings.Autoplay)
+            if (settings.Autoplay != Autoplay.Off)
             {
                 ShowAutoplayPreview();
             }
@@ -212,8 +191,26 @@ namespace YoutubeRadio2016
         }
         private void cmdStop_Click(object sender, EventArgs e)
         {
-            lblNextSong.Visible = false;
-            cmdPlayAutoplayTrack.Visible = false;
+            if(settings.Autoplay != Autoplay.Off)
+            {
+                lblNextSong.Visible = false;
+                cmdPlayAutoplayTrack.Visible = false;
+
+                if(currentTrack != null && currentTrack.IsAutoplayTrack)
+                {
+                    int lastIndex = lstVTracks.Items.Count - 1;
+
+                    CheckAutoplaySettings(lastIndex);
+
+                    if(settings.Autoplay == Autoplay.Load)
+                    {
+                        ListViewItem autoplayTrack = lstVTracks.Items[lastIndex];
+
+                        autoplayTrack.ForeColor = Color.DarkBlue;
+                        autoplayTrack.Font = new Font(autoplayTrack.Font, FontStyle.Bold);
+                    }
+                }
+            }
 
             StopPlayback();
         }
@@ -298,7 +295,7 @@ namespace YoutubeRadio2016
                     waveOut.Stop();
                 }
 
-                if(currentTrack != null && !currentTrack.IsAutoplayTrack)
+                if(currentTrack != null && currentTrack.IsAutoplayTrack)
                 {
                     int lastIndex = lstVTracks.Items.Count - 1;
 
@@ -309,7 +306,7 @@ namespace YoutubeRadio2016
                 UpdateTrackbar();
                 PlayTrack(currentTrack);
 
-                if (settings.Autoplay)
+                if (settings.Autoplay != Autoplay.Off)
                 {
                     ShowAutoplayPreview();
                 }
@@ -344,6 +341,38 @@ namespace YoutubeRadio2016
             formSettings.ShowDialog();            
             CheckSettings(settings);
         }
+        private void optAutoplay_CheckedChanged(object sender, EventArgs e)
+        {
+            if (!optAutoplay_Off.Checked)
+            {
+                if (optAutoplay_Play.Checked)
+                {
+                    settings.Autoplay = Autoplay.Play;
+
+                    chkShuffle.Checked = false;
+                    optRepeatOff.Checked = true;
+                }
+                else
+                {
+                    settings.Autoplay = Autoplay.Load;
+
+                    chkShuffle.Checked = false;
+                    optRepeatOff.Checked = true;
+                }
+
+                if (player.WaveOut != null)
+                {
+                    ShowAutoplayPreview();
+                }
+            }
+            else
+            {
+                settings.Autoplay = Autoplay.Off;
+
+                lblNextSong.Visible = false;
+                cmdPlayAutoplayTrack.Visible = false;
+            }
+        }
         private void optRepeat_CheckedChanged(object sender, EventArgs e)
         {
             if(optRepeatOff.Checked)
@@ -352,7 +381,7 @@ namespace YoutubeRadio2016
             }
             else
             {
-                chkAutoplay.Checked = false;
+                optAutoplay_Off.Checked = true;
 
                 if (optRepeatAll.Checked)
                 {
@@ -371,7 +400,7 @@ namespace YoutubeRadio2016
             {
                 tmrPlayTrack.Stop();
 
-                if (settings.Autoplay)
+                if (settings.Autoplay != Autoplay.Off)
                 {
                     cmdPlayAutoplayTrack_Click(sender, e);
                 }
@@ -472,8 +501,6 @@ namespace YoutubeRadio2016
                     }
                 }
             }
-
-            lblTrackPos.Text = "settings.Volume: " + settings.Volume.ToString();
         }
 
         private void AddTracks(string videoUrl, bool autoplayTrack = false)
@@ -507,14 +534,131 @@ namespace YoutubeRadio2016
 
             txtUrl.Focus();
         }
-        private void CheckSettings(Settings settings)
+        private void ChangeToSelectedTrack()
         {
-            if (settings.Autoplay)
+            if (currentTrack != null)
             {
-                chkAutoplay.Checked = true;
+                int trackIndexBeforeChange = currentTrack.IndexSortedList;
+                ListViewItem itemBeforeChange = lstVTracks.Items[trackIndexBeforeChange];
+
+                itemBeforeChange.ForeColor = Color.FromName("WindowText");
+                itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
+            }
+
+            player.CurrentTrack = selectedTrack;
+            currentTrack = player.CurrentTrack;
+            selectedTrack = null;
+            lstVTracks.SelectedItems[0].Selected = false;
+
+            int trackIndexAfterChange = currentTrack.IndexSortedList;
+            ListViewItem itemAfterChange = lstVTracks.Items[currentTrack.IndexSortedList];
+
+            itemAfterChange.ForeColor = Color.DarkBlue;
+            itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
+        }
+        private void ChangeTrack(bool buttonPressed, bool previousTrack, AudioTrack selectedTrack = null)
+        {
+            if (player.WaveOut != null)
+            {
+                player.WaveOut.Stop();
+            }
+
+            tmrPlayTrack.Stop();
+            trkBDuration.Enabled = false;
+
+            AudioTrack nextTrack;
+
+            GetNextTrackToPlay(buttonPressed, previousTrack, out nextTrack);
+
+            if (nextTrack != null)
+            {
+                int trackIndex = nextTrack.IndexSortedList;
+                ListViewItem itemAfterChange = lstVTracks.Items[trackIndex];
+
+                if (currentTrack != null)
+                {
+                    itemAfterChange.ForeColor = Color.DarkBlue;
+                    itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
+
+                    if (!currentTrack.IsAutoplayTrack)
+                    {
+                        ListViewItem itemBeforeChange = lstVTracks.Items[currentTrack.IndexSortedList];
+
+                        itemBeforeChange.ForeColor = Color.FromName("WindowText");
+                        itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
+                    }
+                    else
+                    {
+                        int lastIndex = lstVTracks.Items.Count - 1;
+
+                        CheckAutoplaySettings(lastIndex);
+                    }
+
+                    player.CurrentTrack = allAudioTracks[trackIndex];
+                    currentTrack = player.CurrentTrack;
+
+                    UpdateTrackbar();
+
+                    if (currentTrack != null)
+                    {
+                        PlayTrack(currentTrack);
+                    }
+
+                    if (settings.Autoplay != Autoplay.Off)
+                    {
+                        ShowAutoplayPreview();
+                    }
+                }
+                else
+                {
+                    itemAfterChange.Selected = true;
+                }
+
+                lstVTracks.Items[itemAfterChange.Index].EnsureVisible();
             }
             else
             {
+                StopPlayback();
+            }
+        }
+        private void CheckAutoplaySettings(int lastIndex)
+        {
+            if(settings.Autoplay == Autoplay.Play && currentTrack.IsAutoplayTrack)
+            {
+                RemoveTrack(currentTrack);
+
+                lastIndex--;
+            }
+            else if(currentTrack.IsAutoplayTrack)
+            {
+                string title = currentTrack.Title;
+                TimeSpan duration = TimeSpan.FromTicks(currentTrack.Duration);
+                string durationString = duration.ToString("T");
+                string[] subItems = { title, durationString };
+
+                lstVTracks.Items.RemoveAt(lastIndex);
+                lstVTracks.Items.Add(new ListViewItem(subItems));
+
+                currentTrack.IsAutoplayTrack = false;
+            }
+        }
+        private void CheckSettings(Settings settings)
+        {
+            if (settings.Autoplay != Autoplay.Off)
+            {
+                if (settings.Autoplay == Autoplay.Play)
+                {
+                    optAutoplay_Play.Checked = true;
+                }
+                else
+                {
+                    optAutoplay_Load.Checked = true;
+                }
+            }
+            else
+            {
+                optAutoplay_Off.Checked = true;
+
                 if (settings.Repeat == Repeat.RepeatAll)
                 {
                     optRepeatAll.Checked = true;
@@ -570,103 +714,6 @@ namespace YoutubeRadio2016
 
             UpdateButtons();
         }
-        private void ChangeToSelectedTrack()
-        {
-            if(currentTrack != null)
-            {
-                int trackIndexBeforeChange = currentTrack.IndexSortedList;
-                ListViewItem itemBeforeChange = lstVTracks.Items[trackIndexBeforeChange];
-
-                itemBeforeChange.ForeColor = Color.FromName("WindowText");
-                itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
-            }
-
-            player.CurrentTrack = selectedTrack;
-            currentTrack = player.CurrentTrack;
-            selectedTrack = null;
-            lstVTracks.SelectedItems[0].Selected = false;
-
-            int trackIndexAfterChange = currentTrack.IndexSortedList;
-            ListViewItem itemAfterChange = lstVTracks.Items[currentTrack.IndexSortedList];
-
-            itemAfterChange.ForeColor = Color.DarkBlue;
-            itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
-        }
-        private void ChangeTrack(bool buttonPressed, bool previousTrack, AudioTrack selectedTrack = null)
-        {
-            if (player.WaveOut != null)
-            {
-                player.WaveOut.Stop();
-            }
-
-            tmrPlayTrack.Stop();
-            trkBDuration.Enabled = false;
-
-            AudioTrack nextTrack;
-            ListViewItem itemBeforeChange = lstVTracks.Items[currentTrack.IndexSortedList];
-
-            GetNextTrackToPlay(buttonPressed, previousTrack, out nextTrack);
-
-            if (nextTrack != null)
-            {
-                int trackIndex = nextTrack.IndexSortedList;
-                ListViewItem itemAfterChange = lstVTracks.Items[trackIndex];
-
-                if (currentTrack != null)
-                {
-                    itemBeforeChange.ForeColor = Color.FromName("WindowText");
-                    itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
-                    itemAfterChange.ForeColor = Color.DarkBlue;
-                    itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
-
-                    player.CurrentTrack = allAudioTracks[trackIndex];
-                    currentTrack = player.CurrentTrack;
-
-                    UpdateTrackbar();
-
-                    if (player.WaveOut != null)
-                    {
-                        PlayTrack(currentTrack);
-                    }
-
-                    if (settings.Autoplay)
-                    {
-                        ShowAutoplayPreview();
-                    }
-                }
-                else
-                {
-                    itemAfterChange.Selected = true;
-                }
-
-                lstVTracks.Items[itemAfterChange.Index].EnsureVisible();
-            }
-            else
-            {
-                StopPlayback();
-            }
-        }        
-        private void CheckAutoplaySettings(int lastIndex)
-        {
-            if (settings.AutoplaySettings == AutoplaySettings.Play && currentTrack.IsAutoplayTrack)
-            {
-                RemoveTrack(currentTrack);
-
-                lastIndex--;
-            }
-            else
-            {
-                string title = currentTrack.Title;
-                TimeSpan duration = TimeSpan.FromTicks(currentTrack.Duration);
-                string durationString = duration.ToString("T");
-                string[] subItems = { title, durationString };
-
-                lstVTracks.Items.RemoveAt(lastIndex);
-                lstVTracks.Items.Add(new ListViewItem(subItems));
-
-                currentTrack.IsAutoplayTrack = false;
-            }
-        }
         private void DoAutoplayOperations()
         {
             try
@@ -677,7 +724,16 @@ namespace YoutubeRadio2016
 
                 AddTracks(videoURLAutoplayTrack, true);
 
-                lastIndex++;
+                lastIndex = lstVTracks.Items.Count - 1;
+
+                if(currentTrack != null)
+                {
+                    int trackIndexBeforeChange = currentTrack.IndexSortedList;
+                    ListViewItem itemBeforeChange = lstVTracks.Items[trackIndexBeforeChange];
+
+                    itemBeforeChange.ForeColor = Color.FromName("WindowText");
+                    itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
+                }
 
                 ListViewItem autoplayTrackItem = lstVTracks.Items[lastIndex];
 
@@ -689,12 +745,11 @@ namespace YoutubeRadio2016
 
                 UpdateTrackbar();
                 ShowAutoplayPreview();
-                PlayTrack(currentTrack);
-                
+                PlayTrack(currentTrack);                
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Es ist ein unerwarteter Fehler aufgetreten!\n\n" + ex.Message);
+                MessageBox.Show("Es ist ein unerwarteter Fehler aufgetreten!\n\n" + ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         private void GetMousePositionTrackbar(int mouseX)
@@ -817,7 +872,7 @@ namespace YoutubeRadio2016
                     "Beim Abspielen des Songs ist ein unerwarteter Fehler aufgetreten!\n\n" + ex.Message, "Unerwarteter Fehler",
                     MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1);
 
-                if (settings.Autoplay)
+                if (settings.Autoplay != Autoplay.Off)
                 {
                     PlayNextAutoplayTrack();
                 }
@@ -968,12 +1023,10 @@ namespace YoutubeRadio2016
         {
             var doc = new HtmlWeb().Load(currentTrack.VideoUrl);
 
-            var test = doc.DocumentNode.SelectNodes("//div[@class='content-wrapper']");
-
             string videoID = doc.DocumentNode.SelectSingleNode("//div[@class='content-wrapper']/a").Attributes["href"].Value;
             string videoUrl = "https://www.youtube.com" + videoID;
 
             return videoUrl;
-        }        
+        }
     }
 }

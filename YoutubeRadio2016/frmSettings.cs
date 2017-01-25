@@ -26,7 +26,7 @@ namespace YoutubeRadio2016
         }
         private void optAutoplay_CheckedChanged(object sender, EventArgs e)
         {
-            if (!optAutoplayOff.Checked)
+            if (!optAutoplay_Off.Checked)
             {
                 optRepeatOff.Checked = true;
                 optShuffleOff.Checked = true;
@@ -36,7 +36,7 @@ namespace YoutubeRadio2016
         {
             if (!optRepeatOff.Checked)
             {
-                optAutoplayOff.Checked = true;
+                optAutoplay_Off.Checked = true;
 
                 if (optRepeatOne.Checked)
                 {
@@ -48,7 +48,7 @@ namespace YoutubeRadio2016
         {
             if (optShuffleOn.Checked)
             {
-                optAutoplayOff.Checked = true;
+                optAutoplay_Off.Checked = true;
 
                 if (optRepeatOne.Checked)
                 {
@@ -59,22 +59,17 @@ namespace YoutubeRadio2016
 
         private void ApplyAutoplay()
         {
-            if(!optAutoplayOff.Checked)
+            if (optAutoplay_Play.Checked)
             {
-                newSettings.Autoplay = true;
-
-                if (optAutoplayPlay.Checked)
-                {
-                    newSettings.AutoplaySettings = AutoplaySettings.Play;
-                }
-                else
-                {
-                    newSettings.AutoplaySettings = AutoplaySettings.Load;
-                }
+                newSettings.Autoplay = Autoplay.Play;
+            }
+            else if (optAutoplay_Load.Checked)
+            {
+                newSettings.Autoplay = Autoplay.Load;
             }
             else
             {
-                newSettings.Autoplay = false;
+                newSettings.Autoplay = Autoplay.Off;
             }
         }
         private void ApplyRepeat()
@@ -121,22 +116,19 @@ namespace YoutubeRadio2016
                 newSettings.Shuffle = false;
             }                        
         }
-        private void CheckAutoplay(bool autoplay, AutoplaySettings autoplaySettings)
+        private void CheckAutoplay(Autoplay autoplay)
         {
-            if(autoplay)
+            if (autoplay == Autoplay.Play)
             {
-                if (autoplaySettings == AutoplaySettings.Load)
-                {
-                    optAutoplayLoad.Checked = true;
-                }
-                else if (autoplaySettings == AutoplaySettings.Play)
-                {
-                    optAutoplayPlay.Checked = true;
-                }
+                optAutoplay_Play.Checked = true;
+            }
+            else if (autoplay == Autoplay.Load)
+            {
+                optAutoplay_Load.Checked = true;
             }
             else
             {
-                optAutoplayOff.Checked = true;
+                optAutoplay_Off.Checked = true;
             }
         }
         private void CheckRepeat(Repeat repeat)
@@ -167,9 +159,9 @@ namespace YoutubeRadio2016
         }
         private void CheckSettings(Settings settings)
         {
-            CheckAutoplay(settings.Autoplay, settings.AutoplaySettings);
+            CheckAutoplay(settings.Autoplay);
 
-            if (settings.Autoplay)
+            if (settings.Autoplay != Autoplay.Off)
             {
                 optRepeatOff.Checked = true;
                 optShuffleOff.Checked = true;

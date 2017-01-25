@@ -7,22 +7,20 @@ namespace YoutubeRadio2016
 {
     public class Settings
     {
-        public bool Autoplay { get; set; }
         public bool SaveList { get; set; }
         public bool Shuffle { get; set; }
         public float Volume { get; set; }
-        public AutoplaySettings AutoplaySettings { get; set; }
+        public Autoplay Autoplay { get; set; }
         public Repeat Repeat { get; set; }
 
         public Settings()
         {
         }
-        public Settings(bool autoplay, bool saveList, bool shuffle, AutoplaySettings autoplaySettings, Repeat repeat, float volume)
+        public Settings(bool saveList, bool shuffle, Autoplay autoplay, Repeat repeat, float volume)
         {
-            Autoplay = autoplay;
             SaveList = saveList;
             Shuffle = shuffle;
-            AutoplaySettings = autoplaySettings;
+            Autoplay = autoplay;
             Repeat = repeat;
             Volume = volume;
         }
@@ -96,7 +94,7 @@ namespace YoutubeRadio2016
                     "Die Datei \"settings\" wurde nicht gefunden! Die Einstellungen werden auf die Standardwerte gesetzt!",
                     "Datei nicht gefunden", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1);
 
-                settings = new Settings(false, true, false, AutoplaySettings.Load, Repeat.RepeatOff, 1);
+                settings = new Settings(true, false, Autoplay.Off, Repeat.RepeatOff, 1);
             }
 
             return settings;
