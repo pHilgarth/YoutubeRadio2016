@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 using System.Xml.Serialization;
@@ -7,12 +8,14 @@ namespace YoutubeRadio2016
 {
     public class Settings
     {
+        static string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "YouTubeRadio");
+
         public bool SaveList { get; set; }
         public bool Shuffle { get; set; }
         public float Volume { get; set; }
         public Autoplay Autoplay { get; set; }
         public Repeat Repeat { get; set; }
-
+                
         public Settings()
         {
         }
@@ -27,7 +30,6 @@ namespace YoutubeRadio2016
 
         public static void SerializeSettingsAndPlaylist(Settings settings, List<AudioTrack> playlist)
         {
-            string directory = @"C:\Users\Public\Documents\YoutubeRadio";
             string filepath = Path.Combine(directory, "settings.xml");
 
             Directory.CreateDirectory(directory);
@@ -59,7 +61,7 @@ namespace YoutubeRadio2016
         public static List<AudioTrack> DeserializePlaylist()
         {
             List<AudioTrack> playlist = new List<AudioTrack>();
-            string filepath = @"C:\Users\Public\Documents\YoutubeRadio\playlist.xml";
+            string filepath = Path.Combine(directory, "playlist.xml");
 
             if (File.Exists(filepath))
             {
@@ -75,7 +77,7 @@ namespace YoutubeRadio2016
         }
         public static Settings DeserializeSettings()
         {
-            string filepath = @"C:\Users\Public\Documents\YoutubeRadio\settings.xml";
+            string filepath = Path.Combine(directory, "settings.xml");
 
             Settings settings = null;
 
