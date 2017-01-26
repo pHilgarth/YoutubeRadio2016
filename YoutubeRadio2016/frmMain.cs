@@ -254,10 +254,7 @@ namespace YoutubeRadio2016
             cmdMute.Image = muteOffImage;
             cmdPlay.Image = playImage;
 
-            settings = Settings.DeserializeSettings();
-
-            CheckSettings(settings);
-
+            settings = Settings.DeserializeSettings();            
             trackFactory.AllAudioTracks = Settings.DeserializePlaylist();
 
             player.AllAudioTracks = trackFactory.AllAudioTracks;
@@ -276,6 +273,8 @@ namespace YoutubeRadio2016
 
                 cmdPlay.Enabled = true;
             }
+
+            CheckSettings(settings);
         }
         private void lstVTracks_KeyUp(object sender, KeyEventArgs e)
         {
