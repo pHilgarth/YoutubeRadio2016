@@ -86,7 +86,16 @@ namespace YoutubeRadio2016
                 var reader = new StreamReader(filepath);
                 var serializer = new XmlSerializer(typeof(Settings));
 
-                settings = (Settings)serializer.Deserialize(reader);
+                try
+                {
+                    settings = (Settings)serializer.Deserialize(reader);
+                }
+                catch(InvalidOperationException)
+                {
+                    MessageBox.Show(
+                        "Die Datei \"settings\" ist fehlerhaft und konnte nicht geladen werden! Die Einstellungen werden auf die Standardwerte gesetzt!",
+                        "Datei fehlerhaft", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1);
+                }
 
                 reader.Close();
             }
