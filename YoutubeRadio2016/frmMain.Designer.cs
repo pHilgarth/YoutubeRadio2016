@@ -45,7 +45,6 @@
             this.cmdNextTrack = new System.Windows.Forms.Button();
             this.cmdPreviousTrack = new System.Windows.Forms.Button();
             this.imgLPlayPause = new System.Windows.Forms.ImageList(this.components);
-            this.chkShuffle = new System.Windows.Forms.CheckBox();
             this.cmdRemoveTrack = new System.Windows.Forms.Button();
             this.cmdClearList = new System.Windows.Forms.Button();
             this.volSlider = new NAudio.Gui.VolumeSlider();
@@ -67,10 +66,14 @@
             this.optAutoplay_Off = new System.Windows.Forms.RadioButton();
             this.optAutoplay_Load = new System.Windows.Forms.RadioButton();
             this.optAutoplay_Play = new System.Windows.Forms.RadioButton();
+            this.grpShuffle = new System.Windows.Forms.GroupBox();
+            this.optShuffle_Off = new System.Windows.Forms.RadioButton();
+            this.optShuffle_On = new System.Windows.Forms.RadioButton();
             ((System.ComponentModel.ISupportInitialize)(this.trkBDuration)).BeginInit();
             this.mnuStrip.SuspendLayout();
             this.grpRepeat.SuspendLayout();
             this.grpAutoplay.SuspendLayout();
+            this.grpShuffle.SuspendLayout();
             this.SuspendLayout();
             // 
             // lstVTracks
@@ -225,17 +228,6 @@
             this.imgLPlayPause.TransparentColor = System.Drawing.Color.Transparent;
             this.imgLPlayPause.Images.SetKeyName(0, "ytrPlay.png");
             this.imgLPlayPause.Images.SetKeyName(1, "ytrPause.png");
-            // 
-            // chkShuffle
-            // 
-            this.chkShuffle.AutoSize = true;
-            this.chkShuffle.Location = new System.Drawing.Point(264, 739);
-            this.chkShuffle.Name = "chkShuffle";
-            this.chkShuffle.Size = new System.Drawing.Size(112, 17);
-            this.chkShuffle.TabIndex = 6;
-            this.chkShuffle.Text = "Zufallswiedergabe";
-            this.chkShuffle.UseVisualStyleBackColor = true;
-            this.chkShuffle.CheckedChanged += new System.EventHandler(this.chkShuffle_CheckedChanged);
             // 
             // cmdRemoveTrack
             // 
@@ -458,11 +450,48 @@
             this.optAutoplay_Play.UseVisualStyleBackColor = true;
             this.optAutoplay_Play.CheckedChanged += new System.EventHandler(this.optAutoplay_CheckedChanged);
             // 
+            // grpShuffle
+            // 
+            this.grpShuffle.Controls.Add(this.optShuffle_Off);
+            this.grpShuffle.Controls.Add(this.optShuffle_On);
+            this.grpShuffle.Location = new System.Drawing.Point(267, 720);
+            this.grpShuffle.Name = "grpShuffle";
+            this.grpShuffle.Size = new System.Drawing.Size(129, 100);
+            this.grpShuffle.TabIndex = 28;
+            this.grpShuffle.TabStop = false;
+            this.grpShuffle.Text = "Zufallswiedergabe";
+            // 
+            // optShuffle_Off
+            // 
+            this.optShuffle_Off.AutoSize = true;
+            this.optShuffle_Off.Checked = true;
+            this.optShuffle_Off.Location = new System.Drawing.Point(17, 53);
+            this.optShuffle_Off.Name = "optShuffle_Off";
+            this.optShuffle_Off.Size = new System.Drawing.Size(43, 17);
+            this.optShuffle_Off.TabIndex = 2;
+            this.optShuffle_Off.TabStop = true;
+            this.optShuffle_Off.Text = "Aus";
+            this.optShuffle_Off.UseVisualStyleBackColor = true;
+            this.optShuffle_Off.CheckedChanged += new System.EventHandler(this.optShuffle_CheckedChanged);
+            // 
+            // optShuffle_On
+            // 
+            this.optShuffle_On.AutoSize = true;
+            this.optShuffle_On.Location = new System.Drawing.Point(17, 30);
+            this.optShuffle_On.Name = "optShuffle_On";
+            this.optShuffle_On.Size = new System.Drawing.Size(38, 17);
+            this.optShuffle_On.TabIndex = 0;
+            this.optShuffle_On.TabStop = true;
+            this.optShuffle_On.Text = "An";
+            this.optShuffle_On.UseVisualStyleBackColor = true;
+            this.optShuffle_On.CheckedChanged += new System.EventHandler(this.optShuffle_CheckedChanged);
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(882, 866);
+            this.Controls.Add(this.grpShuffle);
             this.Controls.Add(this.grpAutoplay);
             this.Controls.Add(this.prgLoadTracks);
             this.Controls.Add(this.cmdYoutubeView);
@@ -474,7 +503,6 @@
             this.Controls.Add(this.volSlider);
             this.Controls.Add(this.cmdClearList);
             this.Controls.Add(this.cmdRemoveTrack);
-            this.Controls.Add(this.chkShuffle);
             this.Controls.Add(this.cmdPreviousTrack);
             this.Controls.Add(this.cmdNextTrack);
             this.Controls.Add(this.cmdStop);
@@ -500,6 +528,8 @@
             this.grpRepeat.PerformLayout();
             this.grpAutoplay.ResumeLayout(false);
             this.grpAutoplay.PerformLayout();
+            this.grpShuffle.ResumeLayout(false);
+            this.grpShuffle.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -522,7 +552,6 @@
         private System.Windows.Forms.Button cmdNextTrack;
         private System.Windows.Forms.Button cmdPreviousTrack;
         private System.Windows.Forms.ImageList imgLPlayPause;
-        private System.Windows.Forms.CheckBox chkShuffle;
         private System.Windows.Forms.Button cmdRemoveTrack;
         private System.Windows.Forms.Button cmdClearList;
         private NAudio.Gui.VolumeSlider volSlider;
@@ -544,6 +573,9 @@
         private System.Windows.Forms.RadioButton optAutoplay_Off;
         private System.Windows.Forms.RadioButton optAutoplay_Load;
         private System.Windows.Forms.RadioButton optAutoplay_Play;
+        private System.Windows.Forms.GroupBox grpShuffle;
+        private System.Windows.Forms.RadioButton optShuffle_Off;
+        private System.Windows.Forms.RadioButton optShuffle_On;
     }
 }
 

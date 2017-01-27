@@ -36,34 +36,6 @@ namespace YoutubeRadio2016
             InitializeComponent();
         }
 
-        private void chkShuffle_CheckedChanged(object sender, EventArgs e)
-        {
-            if (chkShuffle.Checked)
-            {
-                settings.Shuffle = true;
-
-                optAutoplay_Off.Checked = true;
-
-                if(optRepeatOne.Checked)
-                {
-                    optRepeatOff.Checked = true;
-                }
-                
-                player.FillUnplayedTracksList();
-            }
-            else
-            {
-                settings.Shuffle = false;
-
-                player.UnplayedTracks.Clear();
-                player.ShuffledPlaylist.Clear();
-
-                foreach(AudioTrack track in allAudioTracks)
-                {
-                    track.IndexShuffledList = -1; //indicates there's no ShuffledList respectively it's empty
-                }
-            }
-        }
         private void cmdAddTracks_Click(object sender, EventArgs e)
         {
             string videoUrl = txtUrl.Text;
@@ -348,14 +320,14 @@ namespace YoutubeRadio2016
                 {
                     settings.Autoplay = Autoplay.Play;
 
-                    chkShuffle.Checked = false;
+                    optShuffle_Off.Checked = true;
                     optRepeatOff.Checked = true;
                 }
                 else
                 {
                     settings.Autoplay = Autoplay.Load;
 
-                    chkShuffle.Checked = false;
+                    optShuffle_Off.Checked = true;
                     optRepeatOff.Checked = true;
                 }
 
@@ -388,8 +360,35 @@ namespace YoutubeRadio2016
                 }
                 else
                 {
-                    chkShuffle.Checked = false;
+                    optShuffle_Off.Checked = true;
                     settings.Repeat = Repeat.RepeatOne;
+                }
+            }
+        }
+        private void optShuffle_CheckedChanged(object sender, EventArgs e)
+        {
+            if (optShuffle_On.Checked)
+            {
+                settings.Shuffle = true;
+                optAutoplay_Off.Checked = true;
+
+                if (optRepeatOne.Checked)
+                {
+                    optRepeatOff.Checked = true;
+                }
+
+                player.FillUnplayedTracksList();
+            }
+            else
+            {
+                settings.Shuffle = false;
+
+                player.UnplayedTracks.Clear();
+                player.ShuffledPlaylist.Clear();
+
+                foreach (AudioTrack track in allAudioTracks)
+                {
+                    track.IndexShuffledList = -1; //indicates there's no ShuffledList respectively it's empty
                 }
             }
         }
@@ -669,7 +668,7 @@ namespace YoutubeRadio2016
 
                 if (settings.Shuffle)
                 {
-                    chkShuffle.Checked = true;
+                    optShuffle_On.Checked = true;
                 }
             }
 
