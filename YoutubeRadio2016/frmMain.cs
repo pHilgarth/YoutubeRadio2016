@@ -159,6 +159,12 @@ namespace YoutubeRadio2016
                 RemoveTrack(selectedTrack);
             }
 
+            if(settings.Autoplay != Autoplay.Off)
+            {
+                cmdPlayAutoplayTrack.Visible = false;
+                lblNextSong.Visible = false;
+            }
+
             txtUrl.Focus();
         }
         private void cmdStop_Click(object sender, EventArgs e)
