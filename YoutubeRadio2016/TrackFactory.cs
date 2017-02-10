@@ -198,7 +198,7 @@ namespace YoutubeRadio2016
             string helperObjectPatternTemplate = @"var #NAME#={.*?};";
 
             Regex playerVersionRegex = new Regex(@"player-(?<PlayerVersion>[\w\d\-]+)\/base\.js");
-            Regex functionNameRegex = new Regex(@"\.sig\|\|(?<FunctionName>[a-zA-Z0-9$]+)\(");
+            Regex functionNameRegex = new Regex(@"\w\.set\(""signature"",\s*(?<FunctionName>[$A-Za-z0-9]+)");
             Regex helperObjectNameRegex = new Regex(@";(?<ObjectName>[$A-Za-z0-9]+)\.");
 
             string playerVersion = playerVersionRegex.Match(videoHtml).Groups["PlayerVersion"].Value;
