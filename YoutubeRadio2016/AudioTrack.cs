@@ -15,7 +15,7 @@
             Title = title;
             VideoUrl = videoUrl;
             Duration = duration;
-        }
+        } 
 
         public bool IsAutoplayTrack { get; set; }
         public bool Scrambled { get; set; }

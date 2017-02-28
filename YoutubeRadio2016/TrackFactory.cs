@@ -23,9 +23,9 @@ namespace YoutubeRadio2016
         public AudioPlayer Player { get; set; }
         public List<AudioTrack> AllAudioTracks { get; set; }
         
-        public void CreateAudioTrack(out bool loadingSuccessfull, bool autoplayTrack, bool shuffle, int trackIndex, string videoURL)
+        public void CreateAudioTrack(out bool loadingSuccessfull, bool autoplayTrack, bool shuffle, int trackIndex, string videoUrl)
         {
-            var doc = new HtmlWeb().Load(videoURL);
+            var doc = new HtmlWeb().Load(videoUrl);
 
             try
             {
@@ -37,36 +37,18 @@ namespace YoutubeRadio2016
                 string durationCode = doc.DocumentNode.SelectSingleNode("//meta[@itemprop='duration']").Attributes["content"].Value;
                 TimeSpan duration = XmlConvert.ToTimeSpan(durationCode);
                 long durationTicks = duration.Ticks;
+                
+                bool scrambled = false;
 
-                string script = doc.DocumentNode.SelectNodes("//script").Select(x => x.InnerHtml).SingleOrDefault(x => x.StartsWith("var ytplayer"));
-                string startIndicator = "ytplayer.config = ";
-                string endIndicator = ";ytplayer.load = function";
-                int startIndex = script.IndexOf(startIndicator) + startIndicator.Length;
-                int endIndex = script.IndexOf(endIndicator);
-                string json = script.Substring(startIndex, endIndex - startIndex);
-                dynamic config = JsonConvert.DeserializeObject<ExpandoObject>(json);
-                string formats;
+                string audioUrl = GetAudioUrl(doc, videoUrl, ref scrambled);
 
-                if(((IDictionary<string, object>)config.args).ContainsKey("adaptive_fmts"))
+                if(!string.IsNullOrEmpty(audioUrl))
                 {
-                    formats = config.args.adaptive_fmts;
+                    var track = new AudioTrack(autoplayTrack, trackIndex, audioUrl, title, videoUrl, durationTicks);
 
-                    var streamObject = formats.Split(',')
-                                        .Select(HttpUtility.ParseQueryString)
-                                        .Where(x => x["type"]
-                                        .Contains("audio/mp4"))
-                                        .SingleOrDefault();
-                    var audioUrl = WebUtility.UrlDecode(streamObject["url"]);
-                    var signature = streamObject["s"];
-
-                    var track = new AudioTrack(autoplayTrack, trackIndex, audioUrl, title, videoURL, durationTicks);
-
-                    if (!string.IsNullOrWhiteSpace(signature))
+                    if (scrambled)
                     {
                         track.Scrambled = true;
-                        signature = DecryptSignature(track.VideoUrl, signature);
-
-                        track.AudioUrl += "&signature=" + signature;
                     }
 
                     AllAudioTracks.Add(track);
@@ -84,7 +66,7 @@ namespace YoutubeRadio2016
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
 
                     loadingSuccessfull = false;
-                }                
+                }               
             }
             catch (Exception ex)
             {
@@ -135,7 +117,7 @@ namespace YoutubeRadio2016
 
             return itemsToAdd;
         }
-        public List<string> GetVideoURLs(string videoURL)
+        public List<string> GetVideoUrls(string videoURL)
         {
             List<string> videoUrls = new List<string>();
 
@@ -244,6 +226,41 @@ namespace YoutubeRadio2016
             while (moreVideosAvailable);
 
             return videoUrls;
+        }
+
+        public string GetAudioUrl(HtmlAgilityPack.HtmlDocument doc, string videoUrl, ref bool scrambled)
+        {
+            string script = doc.DocumentNode.SelectNodes("//script").Select(x => x.InnerHtml).SingleOrDefault(x => x.StartsWith("var ytplayer"));
+            string startIndicator = "ytplayer.config = ";
+            string endIndicator = ";ytplayer.load = function";
+            int startIndex = script.IndexOf(startIndicator) + startIndicator.Length;
+            int endIndex = script.IndexOf(endIndicator);
+            string json = script.Substring(startIndex, endIndex - startIndex);
+            dynamic config = JsonConvert.DeserializeObject<ExpandoObject>(json);
+            string audioUrl = null;
+
+            if (((IDictionary<string, object>)config.args).ContainsKey("adaptive_fmts"))
+            {
+                string formats = config.args.adaptive_fmts;
+
+                var streamObject = formats.Split(',')
+                                    .Select(HttpUtility.ParseQueryString)
+                                    .Where(x => x["type"]
+                                    .Contains("audio/mp4"))
+                                    .SingleOrDefault();
+                audioUrl = WebUtility.UrlDecode(streamObject["url"]);
+                var signature = streamObject["s"];
+
+                if (!string.IsNullOrWhiteSpace(signature))
+                {
+                    scrambled = true;
+                    signature = DecryptSignature(videoUrl, signature);
+
+                    audioUrl += "&signature=" + signature;
+                }
+            }
+
+            return audioUrl;
         }
     }
 }

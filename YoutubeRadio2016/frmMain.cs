@@ -111,7 +111,7 @@ namespace YoutubeRadio2016
                 lstVTracks.SelectedItems[0].Selected = false;
             }
 
-            ChangeTrack(true, false, selectedTrack);
+            ChangeTrack(true, false);
         }
         private void cmdPlay_Click(object sender, EventArgs e)
         {
@@ -150,7 +150,7 @@ namespace YoutubeRadio2016
                 lstVTracks.SelectedItems[0].Selected = false;
             }
 
-            ChangeTrack(true, true, selectedTrack);
+            ChangeTrack(true, true);
         }
         private void cmdRemoveTrack_Click(object sender, EventArgs e)
         {
@@ -178,7 +178,7 @@ namespace YoutubeRadio2016
                 {
                     int lastIndex = lstVTracks.Items.Count - 1;
 
-                    CheckAutoplaySettings(lastIndex);
+                    AddOrRemoveAutoplayTrack(lastIndex);
 
                     if(settings.Autoplay == Autoplay.Load)
                     {
@@ -217,7 +217,14 @@ namespace YoutubeRadio2016
         {
             settings.Volume = volume;
 
-            Settings.SerializeSettingsAndPlaylist(settings, allAudioTracks);
+            List<string> videoUrls = new List<string>();
+
+            foreach(AudioTrack track in allAudioTracks)
+            {
+                videoUrls.Add(track.VideoUrl);
+            }
+
+            Settings.SerializeSettingsAndPlaylist(settings, videoUrls);
         }
         private void frmMain_Load(object sender, EventArgs e)
         {
@@ -232,27 +239,20 @@ namespace YoutubeRadio2016
             cmdMute.Image = muteOffImage;
             cmdPlay.Image = playImage;
 
-            settings = Settings.DeserializeSettings();            
-            trackFactory.AllAudioTracks = Settings.DeserializePlaylist();
+            settings = Settings.DeserializeSettings();
+            CheckSettings(settings);
+
+            trackFactory.AllAudioTracks = new List<AudioTrack>();
+
+            GetPlaylist();
 
             player.AllAudioTracks = trackFactory.AllAudioTracks;
             allAudioTracks = trackFactory.AllAudioTracks;
 
             if(allAudioTracks.Count != 0)
             {
-                foreach(AudioTrack track in allAudioTracks)
-                {
-                    TimeSpan duration = TimeSpan.FromTicks(track.Duration);
-                    string[] subItems = { track.Title, duration.ToString("T") };
-                    ListViewItem trackItem = new ListViewItem(subItems);
-
-                    lstVTracks.Items.Add(trackItem);
-                }
-
                 cmdPlay.Enabled = true;
             }
-
-            CheckSettings(settings);
         }
         private void lstVTracks_KeyUp(object sender, KeyEventArgs e)
         {
@@ -276,7 +276,7 @@ namespace YoutubeRadio2016
                 {
                     int lastIndex = lstVTracks.Items.Count - 1;
 
-                    CheckAutoplaySettings(lastIndex);
+                    AddOrRemoveAutoplayTrack(lastIndex);
                 }
 
                 ChangeToSelectedTrack();
@@ -415,7 +415,24 @@ namespace YoutubeRadio2016
                         if (settings.Repeat != Repeat.RepeatOff)
                         {
                             UpdateTrackbar();
-                            player.PlayTrack(currentTrack, mute, volume);
+
+                            bool audioUrlUnaccessible;
+
+                            player.PlayTrack(currentTrack, mute, volume, out audioUrlUnaccessible);
+
+                            if(audioUrlUnaccessible)
+                            {
+                                DialogResult dialogResult = MessageBox.Show(
+                                    "Die Tonspur dieses Videos ist zurzeit nicht erreichbar. Wollen Sie das Video entfernen?", "Tonspur nicht erreichbar",
+                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+
+                                if (dialogResult == DialogResult.Yes)
+                                {
+                                    RemoveTrack(currentTrack);
+                                }
+
+                                StopPlayback();
+                            }
                         }
                         else
                         {
@@ -511,7 +528,9 @@ namespace YoutubeRadio2016
         {
             try
             {
-                LoadTracks(videoUrl, autoplayTrack);
+                List<string> videoUrls = trackFactory.GetVideoUrls(videoUrl);
+
+                LoadTracks(videoUrls, autoplayTrack);
 
                 txtUrl.Text = "";
             }
@@ -560,7 +579,7 @@ namespace YoutubeRadio2016
             itemAfterChange.ForeColor = Color.DarkBlue;
             itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
         }
-        private void ChangeTrack(bool buttonPressed, bool previousTrack, AudioTrack selectedTrack = null)
+        private void ChangeTrack(bool buttonPressed, bool previousTrack)
         {
             if (player.WaveOut != null)
             {
@@ -595,7 +614,7 @@ namespace YoutubeRadio2016
                     {
                         int lastIndex = lstVTracks.Items.Count - 1;
 
-                        CheckAutoplaySettings(lastIndex);
+                        AddOrRemoveAutoplayTrack(lastIndex);
                     }
 
                     player.CurrentTrack = allAudioTracks[trackIndex];
@@ -625,7 +644,7 @@ namespace YoutubeRadio2016
                 StopPlayback();
             }
         }
-        private void CheckAutoplaySettings(int lastIndex)
+        private void AddOrRemoveAutoplayTrack(int lastIndex)
         {
             if(settings.Autoplay == Autoplay.Play && currentTrack.IsAutoplayTrack)
             {
@@ -724,7 +743,7 @@ namespace YoutubeRadio2016
             {
                 int lastIndex = lstVTracks.Items.Count - 1;
 
-                CheckAutoplaySettings(lastIndex);
+                AddOrRemoveAutoplayTrack(lastIndex);
 
                 AddTracks(videoURLAutoplayTrack, true);
 
@@ -792,6 +811,12 @@ namespace YoutubeRadio2016
                 player.GetNextTrack(ref nextTrack, false, settings);
             }
         }
+        private void GetPlaylist()
+        {
+            List<string> videoUrls = Settings.DeserializePlaylist();
+
+            LoadTracks(videoUrls, false);
+        }
         private void GetPlaylistsFirstTrack()
         {
             if (settings.Shuffle)
@@ -808,12 +833,11 @@ namespace YoutubeRadio2016
                 currentTrack = player.CurrentTrack;
             }
         }        
-        private void LoadTracks(string videoUrl, bool autoplayTrack)
+        private void LoadTracks(List<string> videoUrls, bool autoplayTrack)
         {
             bool allTracksLoaded;
             bool shuffle = settings.Shuffle;
             int lstVTracksCount = lstVTracks.Items.Count;
-            List<string> videoUrls = trackFactory.GetVideoURLs(videoUrl);
 
             prgLoadTracks.Visible = true;
             prgLoadTracks.Maximum = videoUrls.Count;
@@ -865,10 +889,29 @@ namespace YoutubeRadio2016
         {
             try
             {
-                player.PlayTrack(trackToPlay, mute, volume);
-                tmrPlayTrack.Start();
-                cmdStop.Enabled = true;
-                cmdPlay.Image = pauseImage;
+                bool audioUrlUnaccessible;
+
+                player.PlayTrack(trackToPlay, mute, volume, out audioUrlUnaccessible);
+
+                if (audioUrlUnaccessible)
+                {
+                    DialogResult dialogResult = MessageBox.Show(
+                        "Die Tonspur dieses Videos ist zurzeit nicht erreichbar. Wollen Sie das Video entfernen?", "Tonspur nicht erreichbar",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+
+                    if (dialogResult == DialogResult.Yes)
+                    {
+                        RemoveTrack(currentTrack);
+                    }
+
+                    ChangeTrack(false, false);
+                }
+                else
+                {
+                    tmrPlayTrack.Start();
+                    cmdStop.Enabled = true;
+                    cmdPlay.Image = pauseImage;
+                }
             }
             catch (Exception ex)
             {
@@ -922,6 +965,8 @@ namespace YoutubeRadio2016
             }
 
             lstVTracks.Items.RemoveAt(trackToRemove.IndexSortedList);
+
+            UpdateButtons();
         }
         private void RemoveTrackFromAllTracksList(AudioTrack trackToRemove)
         {

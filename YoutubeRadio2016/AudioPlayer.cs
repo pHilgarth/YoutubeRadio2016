@@ -1,6 +1,8 @@
-﻿using NAudio.Wave;
+﻿using HtmlAgilityPack;
+using NAudio.Wave;
 using System;
 using System.Collections.Generic;
+using System.Windows.Forms;
 
 namespace YoutubeRadio2016
 {
@@ -54,23 +56,45 @@ namespace YoutubeRadio2016
             ShuffledPlaylist.Add(nextTrack);
             nextTrack.IndexShuffledList = ShuffledPlaylist.Count - 1;
         }
-        public void PlayTrack(AudioTrack trackToPlay, bool mute, float volume)
+        public void PlayTrack(AudioTrack trackToPlay, bool mute, float volume, out bool audioUrlUnaccessible)
         {
-            MediaReader = new MediaFoundationReader(trackToPlay.AudioUrl);
-            WaveOut = new WaveOutEvent();
+            audioUrlUnaccessible = false;
 
-            WaveOut.Init(MediaReader);
-
-            if (mute)
+            try
             {
-                WaveOut.Volume = 0;
-            }
-            else
-            {
-                WaveOut.Volume = volume;
-            }
+                bool scrambled = trackToPlay.Scrambled;
+                string videoUrl = trackToPlay.VideoUrl;
+                var doc = new HtmlWeb().Load(videoUrl);
 
-            WaveOut.Play();
+                trackToPlay.AudioUrl = TrackFactory.GetAudioUrl(doc, videoUrl, ref scrambled);
+
+                if (!string.IsNullOrEmpty(trackToPlay.AudioUrl))
+                {
+                    MediaReader = new MediaFoundationReader(trackToPlay.AudioUrl);
+                    WaveOut = new WaveOutEvent();
+
+                    WaveOut.Init(MediaReader);
+
+                    if (mute)
+                    {
+                        WaveOut.Volume = 0;
+                    }
+                    else
+                    {
+                        WaveOut.Volume = volume;
+                    }
+
+                    WaveOut.Play();
+                }
+                else
+                {
+                    audioUrlUnaccessible = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }       
         }
         public void FillUnplayedTracksList()
         {

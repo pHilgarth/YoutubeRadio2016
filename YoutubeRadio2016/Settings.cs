@@ -28,7 +28,7 @@ namespace YoutubeRadio2016
             Volume = volume;
         }
 
-        public static void SerializeSettingsAndPlaylist(Settings settings, List<AudioTrack> playlist)
+        public static void SerializeSettingsAndPlaylist(Settings settings, List<string> videoUrls)
         {
             string filepath = Path.Combine(directory, "settings.xml");
 
@@ -51,29 +51,29 @@ namespace YoutubeRadio2016
                 using (FileStream stream = new FileStream(filepath, FileMode.Create))
                 {
                     StreamWriter writer = new StreamWriter(stream);
-                    XmlSerializer serializer = new XmlSerializer(typeof(List<AudioTrack>));
+                    XmlSerializer serializer = new XmlSerializer(typeof(List<string>));
 
-                    serializer.Serialize(writer, playlist);
+                    serializer.Serialize(writer, videoUrls);
                 }
             }
         }
 
-        public static List<AudioTrack> DeserializePlaylist()
+        public static List<string> DeserializePlaylist()
         {
-            List<AudioTrack> playlist = new List<AudioTrack>();
+            List<string> videoUrls = new List<string>();
             string filepath = Path.Combine(directory, "playlist.xml");
 
             if (File.Exists(filepath))
             {
                 var reader = new StreamReader(filepath);
-                var serializer = new XmlSerializer(typeof(List<AudioTrack>));
+                var serializer = new XmlSerializer(typeof(List<string>));
 
-                playlist = (List<AudioTrack>)serializer.Deserialize(reader);
+                videoUrls = (List<string>)serializer.Deserialize(reader);
 
                 reader.Close();
             }
 
-            return playlist;
+            return videoUrls;
         }
         public static Settings DeserializeSettings()
         {
