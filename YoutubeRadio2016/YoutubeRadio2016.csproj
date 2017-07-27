@@ -93,12 +93,23 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AudioPlayer.cs" />
-    <Compile Include="frmSettings.cs">
+    <Compile Include="Autoplay.cs" />
+    <Compile Include="frmNamePlaylist.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="frmSettings.Designer.cs">
-      <DependentUpon>frmSettings.cs</DependentUpon>
+    <Compile Include="frmNamePlaylist.Designer.cs">
+      <DependentUpon>frmNamePlaylist.cs</DependentUpon>
     </Compile>
+    <Compile Include="frmNewPlaylist.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmNewPlaylist.Designer.cs">
+      <DependentUpon>frmNewPlaylist.cs</DependentUpon>
+    </Compile>
+    <Compile Include="NextSongConditions.cs" />
+    <Compile Include="Playlist.cs" />
+    <Compile Include="PlaylistManager.cs" />
+    <Compile Include="Repeat.cs" />
     <Compile Include="TrackFactory.cs" />
     <Compile Include="AudioTrack.cs" />
     <Compile Include="frmMain.cs">
@@ -114,8 +125,11 @@
       <DependentUpon>frmMain.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="frmSettings.resx">
-      <DependentUpon>frmSettings.cs</DependentUpon>
+    <EmbeddedResource Include="frmNamePlaylist.resx">
+      <DependentUpon>frmNamePlaylist.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmNewPlaylist.resx">
+      <DependentUpon>frmNewPlaylist.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

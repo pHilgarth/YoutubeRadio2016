@@ -4,87 +4,171 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
+using System.Linq;
 using System.Web;
 using System.Windows.Forms;
 
 namespace YoutubeRadio2016
 {
-    public enum Autoplay { Play, Load, Off }
-    public enum Repeat { RepeatOne, RepeatAll, RepeatOff }
-    public enum NextSongConditions { ShuffleRepeatOne, ShuffleRepeatAll, ShuffleOnly, RepeatOne, RepeatAll, Default }
-
     public partial class frmMain : Form
     {
-        float volume;
-        string videoURLAutoplayTrack;
+        //NEXT STEP:
+        //
+        //      rework "GetCurrentPlaylist()"; shouldnt get a string param, all playlists are serialized before, in the load sequence.
+        //
+        //
+        //things to take care of: 
+
+        //      whenever a playlist is loaded, all the audioTracks have to be created new, for the audioUrl might expire
+        //          - that means, I have to handle the case, an audioUrl became invalid and the track won't work anymore
+
+        //      after removing a playlist, update the other playlists indices
+
+        //      check the right usage of the properties Playlist.Filename and Playlist.Name
+        //          - only use Filename, when working at the listBoxPlaylists, for the listBox' entries are the Filenames, the playlists are saved as
+        //          - Name is the current playlistName - might differ from Filename, e. g. right after renaming the playlist
+
+        //      if currentPlaylist was changed, add a * to the name in the listBoxPlaylists as well
+        //      highlight currentPlaylist in listBox;
+        //      'playbackStopped' is set to false at the end at "cmdPlay_Click()" - what, if playing a track fails? 'playbackStopped' would set to false anyway.
+        //
+                
+        bool currentPlaylistChanged = false;
         bool mute = false;
         bool muteButtonClicked = false;
+        bool playbackStopped = true;
         bool trackBarSeeking = false;
-        AudioPlayer player;
+
+        bool savingAborted;
+        float volume;
+        string videoUrlAutoplayTrack;
         AudioTrack currentTrack;
-        AudioTrack selectedTrack;       
-        Image muteOffImage;
+        AudioTrack selectedTrack;
         Image muteOnImage;
+        Image muteOffImage;        
         Image pauseImage;
         Image playImage;
-        List<AudioTrack> allAudioTracks;
+        MediaFoundationReader mediaReader;
+        Playlist currentPlaylist;
         Settings settings;
-        TrackFactory trackFactory = new TrackFactory();
+        WaveOutEvent waveOut;    
 
         public frmMain()
         {
             InitializeComponent();
-        }
+        }           
+                
+        private void cmdAccept_Click(object sender, EventArgs e)
+        {
+            txtPlaylistName.Text = txtPlaylistName.Text.Trim();
 
+            if (PlaylistManager.VerifyPlaylistName(txtPlaylistName.Text, currentPlaylist.Name))
+            {
+                string newPlaylistName = txtPlaylistName.Text;
+
+                if (!currentPlaylist.Name.Equals(newPlaylistName))
+                {
+                    currentPlaylistChanged = true;
+
+                    Text = "YoutubeRadio - " + newPlaylistName + "*";
+                    txtPlaylistName.Text = newPlaylistName + "*";
+
+                    if(currentPlaylist.Index != -1)
+                    {
+                        lstBoxPlaylists.Items[currentPlaylist.Index] = Path.GetFileNameWithoutExtension(currentPlaylist.Filename) + "*";
+                    }
+                }
+
+                currentPlaylist.Name = newPlaylistName;                
+
+                txtPlaylistName.ReadOnly = true;
+                cmdAcceptRenaming.Visible = false;
+                cmdCancelRenaming.Visible = false;
+                txtUrl.Focus();
+            }
+            else
+            {
+                txtPlaylistName.SelectAll();
+                txtPlaylistName.Focus();
+            }
+
+            UpdateButtons();
+        }   
         private void cmdAddTracks_Click(object sender, EventArgs e)
         {
             string videoUrl = txtUrl.Text;
 
-            if (!string.IsNullOrEmpty(videoUrl) && videoUrl.StartsWith("https://www.youtube.com/watch?v="))
+            if(videoUrl.StartsWith("www"))
             {
-                AddTracks(videoUrl);
+                videoUrl = "https://" + videoUrl;
+            }
+
+            if (!string.IsNullOrWhiteSpace(videoUrl) && videoUrl.StartsWith("https://www.youtube.com/watch?v="))
+            {
+                int lstVCountBefore = lstVTracks.Items.Count;
+
+                if(currentPlaylist == null)
+                {
+                    PlaylistManager.CurrentPlaylist = new Playlist();
+                    currentPlaylist = PlaylistManager.CurrentPlaylist;
+
+                    currentPlaylist.Name = "(Neue Playlist)";
+                    txtPlaylistName.Text = currentPlaylist.Name;
+                    Text = currentPlaylist.Name;
+                }
+
+                List<string> videoUrls = TrackFactory.GetVideoUrls(videoUrl);
+
+                LoadTracks(videoUrls);
+
+                txtUrl.Text = "";
+
+                if (lstVCountBefore != lstVTracks.Items.Count && !currentPlaylistChanged)
+                {
+                    currentPlaylistChanged = true;
+                    txtPlaylistName.Text += "*";
+                    Text += "*";
+                    
+                    var shortFilename = Path.GetFileNameWithoutExtension(currentPlaylist.Filename);
+
+                    if (shortFilename != null)
+                    {
+                        var indexCurrentPlaylist = lstBoxPlaylists.Items.IndexOf(shortFilename);
+
+                        lstBoxPlaylists.Items[indexCurrentPlaylist] += "*";
+                    }                    
+                }
+
+                UpdateButtons();
             }
             else
             {
                 MessageBox.Show(
                     "Bitte geben Sie einen youtube-Videolink an!", "Fehlerhafte Eingabe",
                     MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1);
-
-                txtUrl.SelectAll();
-                txtUrl.Focus();
-            }
-        }
-        private void cmdClearList_Click(object sender, EventArgs e)
-        {
-            if (lstVTracks.Items.Count > 0 &&  MessageBox.Show(
-                "Wollen Sie wirklich die komplette Playlist leeren?", "Playlist leeren",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-            {
-                StopPlayback();
-
-                allAudioTracks.Clear();
-                player.ShuffledPlaylist.Clear();
-                player.UnplayedTracks.Clear();
-                lstVTracks.Items.Clear();
-
-                currentTrack = null;
-                selectedTrack = null;
-                player.CurrentTrack = null;
-
-                lblTrackDuration.Text = "00:00:00";
-                lblTrackPos.Text = "00:00:00";
-                trkBDuration.Enabled = false;
-                trkBDuration.Maximum = 0;
-                trkBDuration.Value = 0;
-
-                cmdPreviousTrack.Enabled = false;
-                cmdPlay.Enabled = false;
-                cmdStop.Enabled = false;
-                cmdNextTrack.Enabled = false;
             }
 
+            txtUrl.SelectAll();
             txtUrl.Focus();
         }
+ 
+        private void cmdCancelRenaming_Click(object sender, EventArgs e)
+        {
+            if (!txtPlaylistName.ReadOnly)
+            {
+                txtPlaylistName.Text = currentPlaylist.Name;
+
+                if(currentPlaylistChanged)
+                {
+                    txtPlaylistName.Text += "*";
+                }
+                txtPlaylistName.ReadOnly = true;
+                cmdAcceptRenaming.Visible = false;
+                cmdCancelRenaming.Visible = false;
+            }
+        }   
+
         private void cmdMute_Click(object sender, EventArgs e)
         {
             muteButtonClicked = true;
@@ -102,26 +186,58 @@ namespace YoutubeRadio2016
             }
 
             muteButtonClicked = false;
-        }
+        }   
         private void cmdNextTrack_Click(object sender, EventArgs e)
         {
-            if(lstVTracks.SelectedItems.Count != 0 && currentTrack != null)
+            if(selectedTrack != null && currentTrack != null)
             {
                 selectedTrack = null;
                 lstVTracks.SelectedItems[0].Selected = false;
             }
 
-            ChangeTrack(true, false);
-        }
+            tmrPlayTrack.Stop();
+            trkBDuration.Enabled = false;
+
+            ChangeTrack(AudioPlayer.GetNextTrack(true, settings, videoUrl: videoUrlAutoplayTrack));
+
+            if (!playbackStopped)
+            {
+                PlayTrack(currentTrack);
+            }
+
+            if (settings.Autoplay != Autoplay.Off)
+            {
+                ShowAutoplayPreview();
+            }
+        }   
         private void cmdPlay_Click(object sender, EventArgs e)
         {
             if (currentTrack != null)
             {
-                CmdPlay_CurrentTrackIsNotNull();
+                if (waveOut != null)
+                {
+                    TogglePause();
+                }
+                else
+                {
+                    UpdateTrackbar();
+                    PlayTrack(currentTrack);
+                }
             }
             else
             {
-                CmdPlay_Click_CurrentTrackIsNull();                
+                if (selectedTrack != null)
+                {
+                    currentPlaylist.CurrentTrack = selectedTrack;
+                    currentTrack = currentPlaylist.CurrentTrack;
+                    lstVTracks.SelectedItems[0].Selected = false;
+                    selectedTrack = null;
+                }
+                else
+                {
+                    currentPlaylist.CurrentTrack = GetPlaylistsFirstTrack();
+                    currentTrack = currentPlaylist.CurrentTrack;
+                }
 
                 ListViewItem trackItem = lstVTracks.Items[currentTrack.IndexSortedList];
 
@@ -137,51 +253,61 @@ namespace YoutubeRadio2016
             {
                 ShowAutoplayPreview();
             }
-        }
-        private void cmdPlayAutoplayTrack_Click(object sender, EventArgs e)
-        {
-            PlayNextAutoplayTrack();
-        }
+
+            playbackStopped = false;
+
+            UpdateButtons();
+        }   
         private void cmdPreviousTrack_Click(object sender, EventArgs e)
         {
-            if (lstVTracks.SelectedItems.Count != 0 && currentTrack != null)
+            if (selectedTrack != null && currentTrack != null)
             {
                 selectedTrack = null;
                 lstVTracks.SelectedItems[0].Selected = false;
             }
 
-            ChangeTrack(true, true);
-        }
-        private void cmdRemoveTrack_Click(object sender, EventArgs e)
+            tmrPlayTrack.Stop();
+            trkBDuration.Enabled = false;
+
+            ChangeTrack(AudioPlayer.GetPreviousTrack(settings, selectedTrack));
+
+            if (!playbackStopped)
+            {
+                PlayTrack(currentTrack);
+            }
+
+            if (settings.Autoplay != Autoplay.Off)
+            {
+                ShowAutoplayPreview();
+            }
+        }   
+        private void cmdRenamePlaylist_Click(object sender, EventArgs e)
         {
-            if (selectedTrack != null)
-            {
-                RemoveTrack(selectedTrack);
-            }
+            txtPlaylistName.Text = txtPlaylistName.Text.TrimEnd('*');
 
-            if(settings.Autoplay != Autoplay.Off)
-            {
-                cmdPlayAutoplayTrack.Visible = false;
-                lblNextSong.Visible = false;
-            }
-
-            txtUrl.Focus();
-        }
+            cmdAcceptRenaming.Visible = true;
+            cmdCancelRenaming.Visible = true;
+            txtPlaylistName.ReadOnly = false;
+            txtPlaylistName.Focus();
+        }   
         private void cmdStop_Click(object sender, EventArgs e)
         {
             if(settings.Autoplay != Autoplay.Off)
             {
                 lblNextSong.Visible = false;
-                cmdPlayAutoplayTrack.Visible = false;
 
                 if(currentTrack != null && currentTrack.IsAutoplayTrack)
                 {
                     int lastIndex = lstVTracks.Items.Count - 1;
 
-                    AddOrRemoveAutoplayTrack(lastIndex);
-
-                    if(settings.Autoplay == Autoplay.Load)
+                    if (settings.Autoplay == Autoplay.Play)
                     {
+                        RemoveAutoplayTrack(lastIndex);
+                    }
+                    else
+                    {
+                        CarryAutoplayTrackIntoPlaylist(lastIndex);
+
                         ListViewItem autoplayTrack = lstVTracks.Items[lastIndex];
 
                         autoplayTrack.ForeColor = Color.DarkBlue;
@@ -191,44 +317,56 @@ namespace YoutubeRadio2016
             }
 
             StopPlayback();
-        }
-        private void cmdYoutubeView_Click(object sender, EventArgs e)
-        {
-            if (selectedTrack != null)
-            {
-                if (player.WaveOut != null)
-                {
-                    Play_PauseTrack();
-                }
+        }   
 
-                Process.Start(selectedTrack.VideoUrl);
-            }
-            else if (currentTrack != null)
-            {
-                if (player.WaveOut != null)
-                {
-                    Play_PauseTrack();
-                }
-
-                Process.Start(currentTrack.VideoUrl);
-            }
-        }
         private void frmMain_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (currentPlaylist != null)
+            {
+                if (currentPlaylistChanged)
+                {
+                    DialogResult dialogResult = MessageBox.Show(
+                    "Wollen Sie die Playlist speichern?", "Playlist speichern",
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+
+                    if (dialogResult == DialogResult.Yes)
+                    {
+                        tlsCmdSaveList_Click(sender, e);
+
+                        if (savingAborted)
+                        {
+                            e.Cancel = true;
+                            return;
+                        }
+                    }
+                    else if (dialogResult == DialogResult.Cancel)
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
+
+                settings.LastUsedPlaylist = Path.Combine(PlaylistManager.directory, currentPlaylist.Filename);
+            }           
+
             settings.Volume = volume;
 
-            List<string> videoUrls = new List<string>();
-
-            foreach(AudioTrack track in allAudioTracks)
-            {
-                videoUrls.Add(track.VideoUrl);
-            }
-
-            Settings.SerializeSettingsAndPlaylist(settings, videoUrls);
-        }
+            Settings.SerializeSettings(settings);
+        }   
         private void frmMain_Load(object sender, EventArgs e)
         {
-            player = trackFactory.Player;            
+            bool firstRun = false;
+
+            string ytrDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "YoutubeRadio");
+
+            if (!Directory.Exists(ytrDirectory))
+            {
+                firstRun = true;
+
+                Directory.CreateDirectory(Path.Combine(ytrDirectory, "Playlists"));
+                Directory.CreateDirectory(Path.Combine(ytrDirectory, "Settings"));
+            }
+            
             volume = volSlider.Volume;
 
             muteOffImage = imgLMute.Images[0];
@@ -239,85 +377,165 @@ namespace YoutubeRadio2016
             cmdMute.Image = muteOffImage;
             cmdPlay.Image = playImage;
 
-            settings = Settings.DeserializeSettings();
+            settings = Settings.DeserializeSettings(firstRun);
             CheckSettings(settings);
 
-            trackFactory.AllAudioTracks = new List<AudioTrack>();
+            PlaylistManager.SavedPlaylists = new List<Playlist>();
+            GetPlaylists();
+            GetCurrentPlaylist(settings.LastUsedPlaylist);
 
-            GetPlaylist();
-
-            player.AllAudioTracks = trackFactory.AllAudioTracks;
-            allAudioTracks = trackFactory.AllAudioTracks;
-
-            if(allAudioTracks.Count != 0)
+            if(currentPlaylist != null)
             {
-                cmdPlay.Enabled = true;
+                Text = "YoutubeRadio - " + currentPlaylist.Name;
+                txtPlaylistName.Text = currentPlaylist.Name;
+            }
+
+            UpdateButtons();
+        }
+        private void frmMain_Resize(object sender, EventArgs e)
+        {
+            if (FormWindowState.Minimized == WindowState)
+            {
+                ntfIcon.Visible = true; ;
+                ntfIcon.ShowBalloonTip(500);
+
+                Hide();
+            }
+            else if (FormWindowState.Normal == WindowState)
+            {
+                ntfIcon.Visible = false;
             }
         }
+
+        private void lstBoxPlaylists_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            if (lstBoxPlaylists.SelectedIndex != -1)
+            {
+                if (currentPlaylistChanged)
+                {
+                    DialogResult dialogResult = MessageBox.Show(
+                        "Wollen Sie die aktuelle Playlist speichern?", "Playlist speichern",
+                        MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+
+                    if (dialogResult == DialogResult.Yes)
+                    {
+                        tlsCmdSaveList_Click(sender, e);
+
+                        if (savingAborted)
+                        {
+                            return;
+                        }
+                    }
+                    else if (dialogResult == DialogResult.No)
+                    {
+                        var shortFilename = Path.GetFileNameWithoutExtension(currentPlaylist.Filename);
+
+                        if (shortFilename != null)
+                        {
+                            var indexCurrentPlaylist = lstBoxPlaylists.Items.IndexOf(shortFilename + "*");
+
+                            lstBoxPlaylists.Items[indexCurrentPlaylist] = shortFilename;
+                        }
+
+                        currentPlaylistChanged = false;
+                    }
+                    else
+                    {
+                        lstBoxPlaylists.SelectedIndex = -1;
+                        return;
+                    }
+                }
+
+                if (currentPlaylist != null)
+                {
+                    StopPlayback();
+                    ClearListViewTracks();
+                }
+
+                var playlistName = lstBoxPlaylists.Items[lstBoxPlaylists.SelectedIndex].ToString();
+
+                string filepath = Path.Combine(PlaylistManager.directory, playlistName + ".xml");
+
+                GetCurrentPlaylist(filepath);
+
+                Text = "YoutubeRadio - " + playlistName;
+                txtPlaylistName.Text = playlistName;
+
+                lstBoxPlaylists.SelectedIndex = -1;
+
+                UpdateButtons();
+            }
+        }   
+        private void lstBoxPlaylists_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            tlsCmdRemovePlaylist.Enabled = CanRemovePlaylist();
+        }   
+
         private void lstVTracks_KeyUp(object sender, KeyEventArgs e)
         {
             if (selectedTrack != null && e.KeyCode == Keys.Delete)
             {
-                cmdRemoveTrack_Click(sender, e);
+                tlsCmdRemoveTrack_Click(sender, e);
             }
-        }
+        }   
         private void lstVTracks_MouseDoubleClick(object sender, MouseEventArgs e)
         {
+            playbackStopped = false;
+
             if (selectedTrack != null)
             {
-                WaveOutEvent waveOut = player.WaveOut;
-
                 if (waveOut != null)
                 {
                     waveOut.Stop();
                 }
 
-                if(currentTrack != null && currentTrack.IsAutoplayTrack)
+                if (currentTrack != null && !currentTrack.Equals(selectedTrack))
                 {
-                    int lastIndex = lstVTracks.Items.Count - 1;
-
-                    AddOrRemoveAutoplayTrack(lastIndex);
+                    if (currentTrack.IsAutoplayTrack)
+                    {
+                        if (settings.Autoplay == Autoplay.Play)
+                        {
+                            RemoveAutoplayTrack(currentTrack.IndexSortedList);
+                        }
+                        else
+                        {
+                            CarryAutoplayTrackIntoPlaylist(currentTrack.IndexSortedList);
+                        }
+                    }
                 }
 
-                ChangeToSelectedTrack();
-                UpdateTrackbar();
+                ChangeTrack(selectedTrack);
                 PlayTrack(currentTrack);
 
                 if (settings.Autoplay != Autoplay.Off)
                 {
                     ShowAutoplayPreview();
                 }
+
+                UpdateButtons();
             }
-        }
+        }   
         private void lstVTracks_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (lstVTracks.SelectedItems.Count == 0)
             {
-                if (currentTrack == null)
-                {
-                    cmdPreviousTrack.Enabled = false;
-                    cmdNextTrack.Enabled = false;
-                    cmdStop.Enabled = false;
-                }
-
                 selectedTrack = null;
             }
             else
             {
-                int trackIndex = lstVTracks.SelectedItems[0].Index;
-
-                selectedTrack = allAudioTracks[trackIndex];
+                selectedTrack = currentPlaylist.SortedPlaylist[lstVTracks.SelectedItems[0].Index];
             }
 
             UpdateButtons();
         }
-        private void mnuSettings_Click(object sender, EventArgs e)
-        {
-            frmSettings formSettings = new frmSettings(settings);
 
-            formSettings.ShowDialog();            
-            CheckSettings(settings);
+        private void ntfIcon_MouseClick(object sender, MouseEventArgs e)
+        {
+            Show();
+
+            WindowState = FormWindowState.Normal;
         }
+
         private void optAutoplay_CheckedChanged(object sender, EventArgs e)
         {
             if (!optAutoplay_Off.Checked)
@@ -325,19 +543,17 @@ namespace YoutubeRadio2016
                 if (optAutoplay_Play.Checked)
                 {
                     settings.Autoplay = Autoplay.Play;
-
-                    optShuffle_Off.Checked = true;
-                    optRepeatOff.Checked = true;
                 }
                 else
                 {
-                    settings.Autoplay = Autoplay.Load;
-
-                    optShuffle_Off.Checked = true;
-                    optRepeatOff.Checked = true;
+                    settings.Autoplay = Autoplay.Load;                    
                 }
 
-                if (player.WaveOut != null)
+                optRepeatOff.Checked = true;
+                optShuffle_Off.Checked = true;                
+
+
+                if (waveOut != null)
                 {
                     ShowAutoplayPreview();
                 }
@@ -347,34 +563,124 @@ namespace YoutubeRadio2016
                 settings.Autoplay = Autoplay.Off;
 
                 lblNextSong.Visible = false;
-                cmdPlayAutoplayTrack.Visible = false;
             }
-        }
+
+            UpdateButtons();
+        }   
         private void optRepeat_CheckedChanged(object sender, EventArgs e)
         {
+            RadioButton senderButton = sender as RadioButton;
+
+            if(senderButton.Checked == true)
+            {
+                return;
+            }
+
             if(optRepeatOff.Checked)
             {
                 settings.Repeat = Repeat.RepeatOff;
             }
             else
             {
-                optAutoplay_Off.Checked = true;
-
                 if (optRepeatAll.Checked)
                 {
+                    if (currentTrack != null && currentTrack.IsAutoplayTrack)
+                    {
+                        if (settings.Autoplay == Autoplay.Load ||
+                            MessageBox.Show("Wollen Sie den aktuellen autoplayTrack in die Liste übernehmen?", "Track übernehmen",
+                            MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                        {
+                            CarryAutoplayTrackIntoPlaylist(lstVTracks.Items.Count - 1);
+
+                            ListViewItem autoplayTrack = lstVTracks.Items[lstVTracks.Items.Count - 1];
+
+                            autoplayTrack.ForeColor = Color.DarkBlue;
+                            autoplayTrack.Font = new Font(autoplayTrack.Font, FontStyle.Bold);
+                        }
+                        else
+                        {
+                            RemoveAutoplayTrack(lstVTracks.Items.Count - 1);
+
+                            if (waveOut != null)
+                            {
+                                waveOut.Stop();
+                            }
+                            
+                            tmrPlayTrack.Stop();
+                            cmdPlay_Click(sender, e);
+                        }                        
+                    }
+
                     settings.Repeat = Repeat.RepeatAll; 
                 }
                 else
                 {
+                    if(currentTrack != null && currentTrack.IsAutoplayTrack)
+                    {
+                        CarryAutoplayTrackIntoPlaylist(lstVTracks.Items.Count - 1);
+
+                        ListViewItem autoplayTrack = lstVTracks.Items[lstVTracks.Items.Count - 1];
+
+                        autoplayTrack.ForeColor = Color.DarkBlue;
+                        autoplayTrack.Font = new Font(autoplayTrack.Font, FontStyle.Bold);
+                    }                    
+
                     optShuffle_Off.Checked = true;
                     settings.Repeat = Repeat.RepeatOne;
                 }
+
+                optAutoplay_Off.Checked = true;
             }
-        }
+        }   
         private void optShuffle_CheckedChanged(object sender, EventArgs e)
         {
+            RadioButton senderButton = sender as RadioButton;
+
+            if (senderButton.Checked == true)
+            {
+                return;
+            }
+
             if (optShuffle_On.Checked)
             {
+                if (currentTrack != null && currentTrack.IsAutoplayTrack)
+                {
+                    if (settings.Autoplay == Autoplay.Load ||
+                        MessageBox.Show("Wollen Sie den aktuellen autoplayTrack in die Liste übernehmen?", "Track übernehmen",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                    {
+                        CarryAutoplayTrackIntoPlaylist(lstVTracks.Items.Count - 1);
+
+                        ListViewItem autoplayTrack = lstVTracks.Items[lstVTracks.Items.Count - 1];
+
+                        autoplayTrack.ForeColor = Color.DarkBlue;
+                        autoplayTrack.Font = new Font(autoplayTrack.Font, FontStyle.Bold);
+
+                        currentPlaylist.UnplayedTracks = new List<AudioTrack>();
+                        currentPlaylist.ShuffledPlaylist = new List<AudioTrack>();
+
+                        currentPlaylist.UnplayedTracks.AddRange(currentPlaylist.SortedPlaylist);
+                    }
+                    else
+                    {
+                        RemoveAutoplayTrack(lstVTracks.Items.Count - 1);
+
+                        if (waveOut != null)
+                        {
+                            waveOut.Stop();
+                        }
+
+                        tmrPlayTrack.Stop();
+
+                        currentPlaylist.UnplayedTracks = new List<AudioTrack>();
+                        currentPlaylist.ShuffledPlaylist = new List<AudioTrack>();
+
+                        currentPlaylist.UnplayedTracks.AddRange(currentPlaylist.SortedPlaylist);
+
+                        cmdPlay_Click(sender, e);
+                    }
+                }
+
                 settings.Shuffle = true;
                 optAutoplay_Off.Checked = true;
 
@@ -382,105 +688,286 @@ namespace YoutubeRadio2016
                 {
                     optRepeatOff.Checked = true;
                 }
-
-                player.FillUnplayedTracksList();
             }
             else
             {
                 settings.Shuffle = false;
 
-                player.UnplayedTracks.Clear();
-                player.ShuffledPlaylist.Clear();
-
-                foreach (AudioTrack track in allAudioTracks)
+                if(currentPlaylist != null)
                 {
-                    track.IndexShuffledList = -1; //indicates there's no ShuffledList respectively it's empty
-                }
+                    currentPlaylist.UnplayedTracks = null;
+                    currentPlaylist.ShuffledPlaylist = null;
+
+                    foreach (AudioTrack track in currentPlaylist.SortedPlaylist)
+                    {
+                        track.IndexShuffledList = -1;
+                    }
+                }                
             }
         }
-        private void tmrPlayTrack_Tick(object sender, EventArgs e)
-        {
-            if (player.WaveOut.PlaybackState == PlaybackState.Stopped)
-            {
-                tmrPlayTrack.Stop();
+    
+        private void tlsCmdClearPlaylist_Click(object sender, EventArgs e)
+        {            
+            DialogResult dialogResult;
 
-                if (settings.Autoplay != Autoplay.Off)
+            dialogResult = MessageBox.Show(
+                    "Wollen Sie die Playlist wirklich leeren?", "Playlist leeren",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+
+            if (dialogResult == DialogResult.Yes)
+            {
+                StopPlayback();
+                ClearListViewTracks();
+                currentPlaylist.ClearAudioTracks();
+
+                if(!currentPlaylistChanged)
                 {
-                    cmdPlayAutoplayTrack_Click(sender, e);
+                    currentPlaylistChanged = true;
+                    txtPlaylistName.Text += "*";
+                    Text += "*";
+
+                    int indexListName = lstBoxPlaylists.Items.IndexOf(currentPlaylist.Name);
+
+                    if (indexListName != -1)
+                    {
+                        lstBoxPlaylists.Items[indexListName] += "*";
+                    }
+                }
+            }
+
+            UpdateButtons();
+        }   
+        private void tlsCmdNewPlaylist_Click(object sender, EventArgs e)
+        {
+            if(currentPlaylistChanged)
+            {
+                DialogResult dialogResult = MessageBox.Show(
+                    "Wollen Sie die aktuelle Playlist speichern?", "Playlist speichern",
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+
+                if(dialogResult == DialogResult.Yes)
+                {
+                    tlsCmdSaveList_Click(sender, e);
+
+                    if(savingAborted)
+                    {
+                        return;
+                    }
+                }
+                else if(dialogResult == DialogResult.No)
+                {
+                    var shortFilename = Path.GetFileNameWithoutExtension(currentPlaylist.Filename);
+
+                    if (shortFilename != null)
+                    {
+                        var indexCurrentPlaylist = lstBoxPlaylists.Items.IndexOf(shortFilename + "*");
+
+                        lstBoxPlaylists.Items[indexCurrentPlaylist] = shortFilename;
+                    }
+
+                    currentPlaylistChanged = false;
                 }
                 else
                 {
-                    if (lstVTracks.Items.Count == 1)
-                    {
-                        if (settings.Repeat != Repeat.RepeatOff)
-                        {
-                            UpdateTrackbar();
-
-                            bool audioUrlUnaccessible;
-
-                            player.PlayTrack(currentTrack, mute, volume, out audioUrlUnaccessible);
-
-                            if(audioUrlUnaccessible)
-                            {
-                                DialogResult dialogResult = MessageBox.Show(
-                                    "Die Tonspur dieses Videos ist zurzeit nicht erreichbar. Wollen Sie das Video entfernen?", "Tonspur nicht erreichbar",
-                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
-
-                                if (dialogResult == DialogResult.Yes)
-                                {
-                                    RemoveTrack(currentTrack);
-                                }
-
-                                StopPlayback();
-                            }
-                        }
-                        else
-                        {
-                            StopPlayback();
-                        }
-                    }
-                    else
-                    {
-                        ChangeTrack(false, false);
-                    }
+                    return;
                 }
+            }
+
+            frmNewPlaylist formNewPlaylist = new frmNewPlaylist(this);
+
+            formNewPlaylist.ShowDialog();
+        }
+        private void tlsCmdRemovePlaylist_Click(object sender, EventArgs e)
+        {
+            Playlist playlistToRemove = PlaylistManager.SavedPlaylists[lstBoxPlaylists.SelectedIndex];           
+
+            DialogResult dialogResult = MessageBox.Show(
+                    "Wollen Sie die Playlist \"" + Path.GetFileNameWithoutExtension(playlistToRemove.Filename) + "\" wirklich dauerhaft entfernen?",
+                    "Playlist löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+
+            if (dialogResult == DialogResult.Yes)
+            {
+                if((playlistToRemove).Equals(currentPlaylist))
+                {
+                    StopPlayback();                                       
+                    ClearListViewTracks();                    
+
+                    Text = "YoutubeRadio - (Keine Playlist)";
+                    txtPlaylistName.Text = "(Keine Playlist)";
+
+                    settings.LastUsedPlaylist = null;
+                    currentPlaylistChanged = false;
+                    PlaylistManager.CurrentPlaylist = null;
+                    currentPlaylist = null;
+                }
+
+                PlaylistManager.RemovePlaylist(playlistToRemove);
+
+                lstBoxPlaylists.Items.RemoveAt(lstBoxPlaylists.SelectedIndex);
+            }
+
+            UpdateButtons();
+
+            txtUrl.Focus();
+        }   
+        private void tlsCmdRemoveTrack_Click(object sender, EventArgs e)
+        {
+            currentPlaylist.RemoveAudioTrack(selectedTrack, settings.Shuffle);
+
+            if(currentTrack != null && selectedTrack.Equals(currentTrack))
+            {
+                StopPlayback();
+
+                if (settings.Autoplay != Autoplay.Off)
+                {
+                    lblNextSong.Visible = false;
+                }
+
+                currentPlaylist.CurrentTrack = null;
+                currentTrack = null;
+            }
+
+            lstVTracks.Items.RemoveAt(selectedTrack.IndexSortedList);
+
+            if (!currentPlaylistChanged)
+            {
+                currentPlaylistChanged = true;
+                txtPlaylistName.Text += "*";
+                Text += "*";
+
+                var shortFilename = Path.GetFileNameWithoutExtension(currentPlaylist.Filename);
+
+                if (shortFilename != null)
+                {
+                    var indexCurrentPlaylist = lstBoxPlaylists.Items.IndexOf(shortFilename);
+
+                    lstBoxPlaylists.Items[indexCurrentPlaylist] += "*";
+                }
+            }
+
+            UpdateButtons();
+
+            txtUrl.Focus();
+        }  
+        private void tlsCmdSaveList_Click(object sender, EventArgs e)
+        {
+            if(string.IsNullOrEmpty(currentPlaylist.Name))
+            {
+                frmNamePlaylist formNamePlaylist = new frmNamePlaylist(this);
+
+                formNamePlaylist.ShowDialog();
+
+                if (!PlaylistManager.VerifyPlaylistName(currentPlaylist.Name))
+                {
+                    savingAborted = true;
+                    return;
+                }
+
+                savingAborted = false;
+            }
+
+            UpdatePlaylist();
+
+            PlaylistManager.SerializePlaylist();
+
+            MessageBox.Show(
+                "Die Playlist wurde erfolgreich gespeichert!", "Playlist gespeichert!",
+                MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1);
+
+            currentPlaylistChanged = false;
+            txtPlaylistName.Text = currentPlaylist.Name;
+            Text = "YoutubeRadio - " + currentPlaylist.Name;
+
+            UpdateButtons();
+            txtUrl.Focus();
+        }  
+        private void tlsCmdYoutubeView_Click(object sender, EventArgs e)
+        {
+            if (selectedTrack != null && currentTrack == null)
+            {
+                Process.Start(selectedTrack.VideoUrl);
+            }
+            else if (currentTrack != null)
+            {
+                if (waveOut != null)
+                {
+                    TogglePause();
+                }
+
+                TimeSpan trackPosition = TimeSpan.FromSeconds(trkBDuration.Value);
+                string adjustedVideoUrl = currentTrack.VideoUrl + "#t=" + trackPosition.Minutes + "m" + trackPosition.Seconds + "s";
+                Process.Start(adjustedVideoUrl);
+            }
+        }   
+
+        private void tmrPlayTrack_Tick(object sender, EventArgs e)
+        {
+            if (waveOut.PlaybackState == PlaybackState.Stopped)
+            {
+                tmrPlayTrack.Stop();
+
+                ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrl: videoUrlAutoplayTrack));
+                PlayTrack(currentTrack);
             }
             else if(!trackBarSeeking)
             {
-                TimeSpan trackPosition = player.MediaReader.CurrentTime;
+                TimeSpan trackPosition = mediaReader.CurrentTime;
                 var trackPositionSeconds = (int)trackPosition.TotalSeconds;
                 string posString = trackPosition.ToString(@"hh\:mm\:ss");
 
-                if(trkBDuration.Maximum >= trackPositionSeconds)
+                if (trkBDuration.Maximum >= trackPositionSeconds)
+                {
                     trkBDuration.Value = trackPositionSeconds;
+                }
 
                 lblTrackPos.Text = posString;
             }
         }
+
         private void trkBDuration_MouseDown(object sender, MouseEventArgs e)
         {
-            trackBarSeeking = true;
+            if (currentTrack != null)
+            {
+                trackBarSeeking = true;
 
-            GetMousePositionTrackbar(e.X);
-        }
+                GetMousePositionTrackbar(e.X);
+            }
+        }   
         private void trkBDuration_MouseMove(object sender, MouseEventArgs e)
         {
             if (trackBarSeeking)
             {
                 GetMousePositionTrackbar(e.X);
             }
-        }
+        } 
         private void trkBDuration_MouseUp(object sender, MouseEventArgs e)
         {
-            player.MediaReader.CurrentTime = TimeSpan.FromSeconds(trkBDuration.Value);
+            if (currentTrack != null)
+            {
+                mediaReader.CurrentTime = TimeSpan.FromSeconds(trkBDuration.Value);
 
-            trackBarSeeking = false;
-        }
+                trackBarSeeking = false;
+            }
+        }  
         private void trkBDuration_ValueChanged(object sender, EventArgs e)
         {
             TimeSpan position = TimeSpan.FromSeconds(trkBDuration.Value);
 
             lblTrackPos.Text = position.ToString("T");
+        }
+
+        private void txtPlaylistName_Enter(object sender, EventArgs e)
+        {
+            AcceptButton = cmdAcceptRenaming;
+        }
+        private void txtPlaylistName_Leave(object sender, EventArgs e)
+        {
+            if (ActiveControl != cmdAcceptRenaming)
+            {
+                cmdCancelRenaming_Click(sender, e);
+            }
+
+            AcceptButton = null;
         }
         private void txtUrl_Enter(object sender, EventArgs e)
         {
@@ -490,10 +977,9 @@ namespace YoutubeRadio2016
         {
             AcceptButton = null;
         }
+
         private void volSlider_VolumeChanged(object sender, EventArgs e)
         {
-            WaveOutEvent waveOut = player.WaveOut;
-
             if (!mute)
             {
                 volume = volSlider.Volume;
@@ -523,148 +1009,91 @@ namespace YoutubeRadio2016
                 }
             }
         }
-
-        private void AddTracks(string videoUrl, bool autoplayTrack = false)
+        
+        
+           
+        public void CreateNewPlaylist(string playlistName)
         {
-            try
-            {
-                List<string> videoUrls = trackFactory.GetVideoUrls(videoUrl);
+            PlaylistManager.CurrentPlaylist = new Playlist(playlistName);
+            currentPlaylist = PlaylistManager.CurrentPlaylist;
+            currentPlaylistChanged = true;
 
-                LoadTracks(videoUrls, autoplayTrack);
+            Text = "YoutubeRadio - " + playlistName + "*";
+            txtPlaylistName.Text = playlistName + "*";
 
-                txtUrl.Text = "";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    "Beim Hinzufügen des Videos ist ein unerwarteter Fehler aufgetreten!\n\n" + ex.Message,
-                    "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                txtUrl.SelectAll();
-                txtUrl.Focus();
-            }
-
-
-            if (lstVTracks.Items.Count > 0)
-            {
-                cmdPlay.Enabled = true;
-
-                if (lstVTracks.Items.Count > 1 && currentTrack != null)
-                {
-                    cmdPreviousTrack.Enabled = true;
-                    cmdNextTrack.Enabled = true;
-                }
-            }
-
-            txtUrl.Focus();
+            ClearListViewTracks();
+            UpdateButtons();
         }
-        private void ChangeToSelectedTrack()
+        public void ApplyPlaylistName(string playlistName)
         {
-            if (currentTrack != null)
-            {
-                int trackIndexBeforeChange = currentTrack.IndexSortedList;
-                ListViewItem itemBeforeChange = lstVTracks.Items[trackIndexBeforeChange];
+            currentPlaylist.Name = playlistName;
 
-                itemBeforeChange.ForeColor = Color.FromName("WindowText");
-                itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
+            txtPlaylistName.Text = playlistName;            
+        }  
+        public void StopPlayback()
+        {
+            if (waveOut != null)
+            {
+                waveOut.Stop();
             }
 
-            player.CurrentTrack = selectedTrack;
-            currentTrack = player.CurrentTrack;
-            selectedTrack = null;
-            lstVTracks.SelectedItems[0].Selected = false;
-
-            int trackIndexAfterChange = currentTrack.IndexSortedList;
-            ListViewItem itemAfterChange = lstVTracks.Items[currentTrack.IndexSortedList];
-
-            itemAfterChange.ForeColor = Color.DarkBlue;
-            itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
-        }
-        private void ChangeTrack(bool buttonPressed, bool previousTrack)
-        {
-            if (player.WaveOut != null)
-            {
-                player.WaveOut.Stop();
-            }
-
+            cmdPlay.Image = playImage;
             tmrPlayTrack.Stop();
-            trkBDuration.Enabled = false;
+            trkBDuration.Maximum = 0;
+            lblTrackDuration.Text = "00:00:00";
+            lblTrackPos.Text = "00:00:00";
+            AudioPlayer.WaveOut = null;
+            AudioPlayer.MediaReader = null;
+            waveOut = null;
+            mediaReader = null;
+            playbackStopped = true;
 
-            AudioTrack nextTrack;
+            UpdateButtons();
+        }  
 
-            GetNextTrackToPlay(buttonPressed, previousTrack, out nextTrack);
-
-            if (nextTrack != null)
-            {
-                int trackIndex = nextTrack.IndexSortedList;
-                ListViewItem itemAfterChange = lstVTracks.Items[trackIndex];
-
-                if (currentTrack != null)
-                {
-                    itemAfterChange.ForeColor = Color.DarkBlue;
-                    itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
-
-                    if (!currentTrack.IsAutoplayTrack)
-                    {
-                        ListViewItem itemBeforeChange = lstVTracks.Items[currentTrack.IndexSortedList];
-
-                        itemBeforeChange.ForeColor = Color.FromName("WindowText");
-                        itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
-                    }
-                    else
-                    {
-                        int lastIndex = lstVTracks.Items.Count - 1;
-
-                        AddOrRemoveAutoplayTrack(lastIndex);
-                    }
-
-                    player.CurrentTrack = allAudioTracks[trackIndex];
-                    currentTrack = player.CurrentTrack;
-
-                    UpdateTrackbar();
-
-                    if (currentTrack != null)
-                    {
-                        PlayTrack(currentTrack);
-                    }
-
-                    if (settings.Autoplay != Autoplay.Off)
-                    {
-                        ShowAutoplayPreview();
-                    }
-                }
-                else
-                {
-                    itemAfterChange.Selected = true;
-                }
-
-                lstVTracks.Items[itemAfterChange.Index].EnsureVisible();
-            }
-            else
-            {
-                StopPlayback();
-            }
-        }
-        private void AddOrRemoveAutoplayTrack(int lastIndex)
+        private void AddNewAutoplayTrack(AudioTrack pickedTrack)
         {
-            if(settings.Autoplay == Autoplay.Play && currentTrack.IsAutoplayTrack)
+            currentPlaylist.AddAudioTrack(pickedTrack);
+            lstVTracks.Items.Add(CreateListViewItem(pickedTrack));            
+        }  
+
+        private void CarryAutoplayTrackIntoPlaylist(int lastIndex)
+        {
+            string title =  currentTrack.Title;
+            TimeSpan duration = TimeSpan.FromTicks(currentTrack.Duration);
+            string durationString = duration.ToString("T");
+            string[] subItems = { title, durationString };
+
+            lstVTracks.Items.RemoveAt(lastIndex);
+            lstVTracks.Items.Add(new ListViewItem(subItems));
+
+            currentTrack.IsAutoplayTrack = false;
+
+            if(!currentPlaylistChanged)
             {
-                RemoveTrack(currentTrack);
-
-                lastIndex--;
+                currentPlaylistChanged = true;
+                txtPlaylistName.Text += "*";
+                Text += "*";
             }
-            else if(currentTrack.IsAutoplayTrack)
+
+            UpdateButtons();
+        }   
+        private void ChangeTrack(AudioTrack pickedTrack)
+        {
+            if(pickedTrack.IsAutoplayTrack && currentTrack != null && !currentTrack.Equals(pickedTrack))
             {
-                string title = currentTrack.Title;
-                TimeSpan duration = TimeSpan.FromTicks(currentTrack.Duration);
-                string durationString = duration.ToString("T");
-                string[] subItems = { title, durationString };
-
-                lstVTracks.Items.RemoveAt(lastIndex);
-                lstVTracks.Items.Add(new ListViewItem(subItems));
-
-                currentTrack.IsAutoplayTrack = false;
+                AddNewAutoplayTrack(pickedTrack);
             }
-        }
+
+            SwitchTrackHighlighting(pickedTrack);
+
+            ListViewItem itemAfterChange = lstVTracks.Items[pickedTrack.IndexSortedList];
+
+            lstVTracks.Items[itemAfterChange.Index].EnsureVisible();
+            currentPlaylist.CurrentTrack = pickedTrack;
+            currentTrack = currentPlaylist.CurrentTrack;
+            UpdateTrackbar();
+        }  
         private void CheckSettings(Settings settings)
         {
             if (settings.Autoplay != Autoplay.Off)
@@ -701,80 +1130,41 @@ namespace YoutubeRadio2016
             {
                 volSlider.Volume = settings.Volume;
             }
-        }
-        private void CmdPlay_CurrentTrackIsNotNull()
+        }   
+        private void ClearListViewTracks()
         {
-            if (player.WaveOut != null)
-            {
-                Play_PauseTrack();
-            }
-            else
-            {
-                if (selectedTrack != null)
-                {
-                    ChangeToSelectedTrack();
-                }
+            lstVTracks.Items.Clear();
 
-                UpdateTrackbar();
-                PlayTrack(currentTrack);                               
-            }
-        }
-        private void CmdPlay_Click_CurrentTrackIsNull()
-        {
-            if (selectedTrack != null)
-            {
-                player.CurrentTrack = selectedTrack;
-                currentTrack = player.CurrentTrack;
-                lstVTracks.Items[selectedTrack.IndexSortedList].Selected = false;
-                selectedTrack = null;
-            }
-            else
-            {
-                GetPlaylistsFirstTrack();
+            selectedTrack = null;
+            currentPlaylist.CurrentTrack = null;
+            currentTrack = null;
 
-                cmdStop.Enabled = true;
-            }
+            lblTrackDuration.Text = "00:00:00";
+            lblTrackPos.Text = "00:00:00";
+            trkBDuration.Enabled = false;
+            trkBDuration.Maximum = 0;
+            trkBDuration.Value = 0;
 
             UpdateButtons();
-        }
-        private void DoAutoplayOperations()
+        }   
+
+        private void GetPlaylists()
         {
-            try
+            string[] playlists = Directory.GetFiles(PlaylistManager.directory);
+
+            foreach(string playlistName in playlists)
             {
-                int lastIndex = lstVTracks.Items.Count - 1;
+                string filepath = Path.Combine(PlaylistManager.directory, playlistName);
+                string shortFilename = Path.GetFileNameWithoutExtension(playlistName);
 
-                AddOrRemoveAutoplayTrack(lastIndex);
+                Playlist newPlaylist = new Playlist(shortFilename);
+                newPlaylist.VideoUrls = PlaylistManager.DeserializeVideoUrls(filepath);
 
-                AddTracks(videoURLAutoplayTrack, true);
-
-                lastIndex = lstVTracks.Items.Count - 1;
-
-                if(currentTrack != null)
-                {
-                    int trackIndexBeforeChange = currentTrack.IndexSortedList;
-                    ListViewItem itemBeforeChange = lstVTracks.Items[trackIndexBeforeChange];
-
-                    itemBeforeChange.ForeColor = Color.FromName("WindowText");
-                    itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
-                }
-
-                ListViewItem autoplayTrackItem = lstVTracks.Items[lastIndex];
-
-                autoplayTrackItem.ForeColor = Color.DarkGreen;
-                autoplayTrackItem.Font = new Font(autoplayTrackItem.Font, FontStyle.Bold);
-
-                player.CurrentTrack = allAudioTracks[lastIndex];
-                currentTrack = player.CurrentTrack;
-
-                UpdateTrackbar();
-                ShowAutoplayPreview();
-                PlayTrack(currentTrack);                
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Es ist ein unerwarteter Fehler aufgetreten!\n\n" + ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                PlaylistManager.AddNewPlaylist(newPlaylist);
+                lstBoxPlaylists.Items.Add(shortFilename);
             }
         }
+
         private void GetMousePositionTrackbar(int mouseX)
         {
             double value = ((double)mouseX / trkBDuration.Width) * trkBDuration.Maximum;
@@ -790,100 +1180,66 @@ namespace YoutubeRadio2016
             }
 
             trkBDuration.Value = (int)value;
-        }
-        private void GetNextTrackToPlay(bool buttonPressed, bool previousTrack, out AudioTrack nextTrack)
+        }  
+        private void GetCurrentPlaylist(string filename)
         {
-            nextTrack = null;
-
-            if (buttonPressed)
+            if (!string.IsNullOrEmpty(filename) && File.Exists(filename))
             {
-                if (previousTrack)
+                PlaylistManager.CurrentPlaylist = PlaylistManager.SavedPlaylists.Find(x => x.Filename == filename);
+                currentPlaylist = PlaylistManager.CurrentPlaylist;
+
+                LoadTracks(currentPlaylist.VideoUrls);
+            }
+            else if(!string.IsNullOrEmpty(filename) && !File.Exists(filename))
+            {
+                string shortFilename = Path.GetFileNameWithoutExtension(filename);
+
+                DialogResult dialogResult = MessageBox.Show(
+                    "Die Playlist \"" + shortFilename + "\" wurde nicht gefunden!\n" +
+                    "Möchten Sie die Playlist aus der Liste entfernen?", "Playlist nicht gefunden",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Error, MessageBoxDefaultButton.Button2);
+
+                if(dialogResult == DialogResult.Yes)
                 {
-                    player.GetPreviousTrack(ref nextTrack, selectedTrack, settings);
-                }
-                else
-                {
-                    player.GetNextTrack(ref nextTrack, true, settings, selectedTrack);
-                }
-            }
-            else
-            {
-                player.GetNextTrack(ref nextTrack, false, settings);
-            }
-        }
-        private void GetPlaylist()
-        {
-            List<string> videoUrls = Settings.DeserializePlaylist();
+                    Playlist playlistToRemove = PlaylistManager.SavedPlaylists.Find(x => x.Filename == filename);
 
-            LoadTracks(videoUrls, false);
-        }
-        private void GetPlaylistsFirstTrack()
-        {
-            if (settings.Shuffle)
-            {
-                AudioTrack trackToPlay = null;
+                    PlaylistManager.RemovePlaylist(playlistToRemove);
 
-                player.GetRandomTrack(ref trackToPlay);
-                player.CurrentTrack = trackToPlay;
-                currentTrack = player.CurrentTrack;
+                    int indexPlaylistToRemove = lstBoxPlaylists.Items.IndexOf(filename);
+
+                    lstBoxPlaylists.Items.RemoveAt(playlistToRemove.Index);
+
+                    Text = "YoutubeRadio - (Keine Playlist)";
+                    txtPlaylistName.Text = "(Keine Playlist)";
+
+                    settings.LastUsedPlaylist = null;
+                    currentPlaylistChanged = false;
+                    PlaylistManager.CurrentPlaylist = null;
+                    currentPlaylist = null;
+                }
             }
-            else
-            {
-                player.CurrentTrack = allAudioTracks[0];
-                currentTrack = player.CurrentTrack;
-            }
+
+            UpdateButtons();
         }        
-        private void LoadTracks(List<string> videoUrls, bool autoplayTrack)
+
+        private void LoadTracks(List<string> videoUrls)
         {
-            bool allTracksLoaded;
-            bool shuffle = settings.Shuffle;
-            int lstVTracksCount = lstVTracks.Items.Count;
+            List<ListViewItem> itemsToAdd = new List<ListViewItem>();
 
             prgLoadTracks.Visible = true;
             prgLoadTracks.Maximum = videoUrls.Count;
             Enabled = false;
-            
-            List<ListViewItem> itemsToAdd = trackFactory.LoadTracks(out allTracksLoaded, autoplayTrack, shuffle, lstVTracksCount, videoUrls, prgLoadTracks);
 
-            Enabled = true;
-            prgLoadTracks.Value = 0;
+            foreach (string videoUrl in videoUrls)
+            {
+                itemsToAdd.Add(CreateAudioTrack(videoUrl, lstVTracks.Items.Count));
+            }
+
             prgLoadTracks.Visible = false;
+            prgLoadTracks.Maximum = 0;
+            Enabled = true;
 
-            foreach (ListViewItem item in itemsToAdd)
-            {
-                lstVTracks.Items.Add(item);
-            }
-
-            if (!allTracksLoaded)
-            {
-                MessageBox.Show(
-                    "Einige Videos sind derzeit nicht verfügbar und wurden daher nicht in den Player geladen!", "Videos nicht verfügbar",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1);
-            }
-        }
-        private void Play_PauseTrack()
-        {
-            PlaybackState playbackState = player.WaveOut.PlaybackState;
-
-            if (playbackState == PlaybackState.Playing)
-            {
-                cmdPlay.Image = playImage;
-                player.WaveOut.Pause();
-                tmrPlayTrack.Stop();
-            }
-            else if (playbackState == PlaybackState.Paused)
-            {
-                cmdPlay.Image = pauseImage;
-                player.WaveOut.Play();
-                tmrPlayTrack.Start();
-            }
-        }
-        private void PlayNextAutoplayTrack()
-        {
-            player.WaveOut.Stop();
-            tmrPlayTrack.Stop();
-            trkBDuration.Enabled = false;
-            DoAutoplayOperations();
+            lstVTracks.Items.AddRange(itemsToAdd.ToArray());
         }
         private void PlayTrack(AudioTrack trackToPlay)
         {
@@ -891,7 +1247,10 @@ namespace YoutubeRadio2016
             {
                 bool audioUrlUnaccessible;
 
-                player.PlayTrack(trackToPlay, mute, volume, out audioUrlUnaccessible);
+                AudioPlayer.PlayTrack(trackToPlay, mute, volume, out audioUrlUnaccessible);
+
+                mediaReader = AudioPlayer.MediaReader;
+                waveOut = AudioPlayer.WaveOut;
 
                 if (audioUrlUnaccessible)
                 {
@@ -901,15 +1260,14 @@ namespace YoutubeRadio2016
 
                     if (dialogResult == DialogResult.Yes)
                     {
-                        RemoveTrack(currentTrack);
+                        currentPlaylist.RemoveAudioTrack(currentTrack, settings.Shuffle);
                     }
 
-                    ChangeTrack(false, false);
+                    ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrl: videoUrlAutoplayTrack));
                 }
                 else
                 {
                     tmrPlayTrack.Start();
-                    cmdStop.Enabled = true;
                     cmdPlay.Image = pauseImage;
                 }
             }
@@ -919,107 +1277,44 @@ namespace YoutubeRadio2016
                     "Beim Abspielen des Songs ist ein unerwarteter Fehler aufgetreten!\n\n" + ex.Message, "Unerwarteter Fehler",
                     MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1);
 
-                if (settings.Autoplay != Autoplay.Off)
+                if (lstVTracks.Items.Count > 1)
                 {
-                    PlayNextAutoplayTrack();
-                }
-                else if(lstVTracks.Items.Count > 1)
-                {
-                    if(settings.Repeat == Repeat.RepeatOne)
-                    {
-                        ChangeTrack(true, false);
-                    }
-                    else
-                    {
-                        ChangeTrack(false, false);
-                    }                    
+                    ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrl: videoUrlAutoplayTrack));
                 }
                 else
                 {
                     StopPlayback();
                 }
             }
-        }
-        private void RemoveTrack(AudioTrack trackToRemove)
-        {
-            if (currentTrack != null && trackToRemove.Equals(currentTrack))
-            {
-                StopPlayback();
-
-                player.CurrentTrack = null;
-                currentTrack = null;
-            }
-
-            RemoveTrackFromAllTracksList(trackToRemove);
-
-            if (settings.Shuffle)
-            {
-                bool trackFound = false;
-
-                RemoveTrackFromUnplayedTracksList(ref trackFound);
-
-                if (!trackFound)
-                {
-                    RemoveTrackFromShuffledPlaylist();
-                }
-            }
-
-            lstVTracks.Items.RemoveAt(trackToRemove.IndexSortedList);
 
             UpdateButtons();
         }
-        private void RemoveTrackFromAllTracksList(AudioTrack trackToRemove)
+
+        private void RemoveAutoplayTrack(int trackIndex)
         {
-            int trackToRemoveIndex = trackToRemove.IndexSortedList;
+            currentPlaylist.RemoveAudioTrack(currentTrack, settings.Shuffle);
 
-            allAudioTracks.RemoveAt(trackToRemoveIndex);
+            lstVTracks.Items.RemoveAt(trackIndex);
 
-            for (int index = trackToRemoveIndex; index < allAudioTracks.Count; index++)
-            {
-                AudioTrack track = allAudioTracks[index];
+            UpdateButtons();
 
-                track.IndexSortedList--;
-            }
+            currentPlaylist.CurrentTrack = null;
+            currentTrack = null;
         }
-        private void RemoveTrackFromShuffledPlaylist()
-        {
-            List<AudioTrack> shuffledPlaylist = player.ShuffledPlaylist;
 
-            int selectedTrackIndex = selectedTrack.IndexShuffledList;
-
-            shuffledPlaylist.RemoveAt(selectedTrackIndex);
-
-            for (int indexToUpdate = selectedTrackIndex; indexToUpdate < shuffledPlaylist.Count; indexToUpdate++)
-            {
-                AudioTrack trackToUpdate = shuffledPlaylist[indexToUpdate];
-
-                trackToUpdate.IndexShuffledList--;
-            }
-        }
-        private void RemoveTrackFromUnplayedTracksList(ref bool trackFound)
-        {
-            List<AudioTrack> unplayedTracks = player.UnplayedTracks;
-
-            for (int index = 0; index < unplayedTracks.Count; index++)
-            {
-                AudioTrack track = unplayedTracks[index];
-
-                if (selectedTrack.Equals(track))
-                {
-                    unplayedTracks.RemoveAt(index);
-
-                    trackFound = true;
-                    break;
-                }
-            }
-        }
         private void ShowAutoplayPreview()
         {
-            videoURLAutoplayTrack = GetVideoUrlAutoplayTrack();
+            videoUrlAutoplayTrack = TrackFactory.GetVideoUrlAutoplayTrack(currentTrack);
 
-            var doc = new HtmlWeb().Load(videoURLAutoplayTrack);
+            var doc = new HtmlWeb().Load(videoUrlAutoplayTrack);
             string title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
             string endIndicatorTitle = " - YouTube";
+
+            while (title == "YouTube")
+            {
+                doc = new HtmlWeb().Load(videoUrlAutoplayTrack);
+                title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
+            }
 
             title = title.Substring(0, title.Length - endIndicatorTitle.Length);
             title = HttpUtility.HtmlDecode(title);
@@ -1027,34 +1322,97 @@ namespace YoutubeRadio2016
             lblNextSong.Text = "Nächstes Lied: " + title;
 
             lblNextSong.Visible = true;
-            cmdPlayAutoplayTrack.Visible = true;
         }
-        private void StopPlayback()
+        private void SwitchTrackHighlighting(AudioTrack trackAfterChange)
         {
-            if(player.WaveOut != null)
+            if (currentTrack != null && currentTrack.IsAutoplayTrack && !currentTrack.Equals(trackAfterChange))
             {
-                player.WaveOut.Stop();
+                if(settings.Autoplay == Autoplay.Play || settings.Autoplay == Autoplay.Off)
+                {
+                    RemoveAutoplayTrack(currentTrack.IndexSortedList);
+                }
+                else
+                {
+                    CarryAutoplayTrackIntoPlaylist(currentTrack.IndexSortedList);
+                }
+            }
+            else if (currentTrack != null && !currentTrack.Equals(trackAfterChange))
+            {
+                ListViewItem itemBeforeChange = lstVTracks.Items[currentTrack.IndexSortedList];
+
+                itemBeforeChange.ForeColor = Color.FromName("WindowText");
+                itemBeforeChange.Font = new Font(itemBeforeChange.Font, FontStyle.Regular);
             }
 
-            cmdPlay.Image = playImage;
-            tmrPlayTrack.Stop();
-            trkBDuration.Maximum = 0;
-            lblTrackDuration.Text = "00:00:00";
-            lblTrackPos.Text = "00:00:00";
-            player.WaveOut = null;
-            player.MediaReader = null;
-        }
-        private void UpdateButtons()
-        {
-            if (lstVTracks.Items.Count == 1 || currentTrack == null)
+            ListViewItem itemAfterChange = lstVTracks.Items[trackAfterChange.IndexSortedList];
+
+            if (trackAfterChange.IsAutoplayTrack)
             {
-                cmdPreviousTrack.Enabled = false;
-                cmdNextTrack.Enabled = false;
+                itemAfterChange.ForeColor = Color.DarkGreen;
+                itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
             }
             else
             {
-                cmdPreviousTrack.Enabled = true;
-                cmdNextTrack.Enabled = true;                
+                if (playbackStopped)
+                {
+                    itemAfterChange.Selected = true;
+                }
+                else
+                {
+                    itemAfterChange.ForeColor = Color.DarkBlue;
+                    itemAfterChange.Font = new Font(itemAfterChange.Font, FontStyle.Bold);
+                }
+            }
+        }
+
+        private void TogglePause()
+        {
+            PlaybackState playbackState = waveOut.PlaybackState;
+
+            if (playbackState == PlaybackState.Playing)
+            {
+                cmdPlay.Image = playImage;
+                waveOut.Pause();
+                tmrPlayTrack.Stop();
+            }
+            else if (playbackState == PlaybackState.Paused)
+            {
+                cmdPlay.Image = pauseImage;
+                waveOut.Play();
+                tmrPlayTrack.Start();
+            }
+        }
+
+        private void UpdateButtons()
+        {
+            tlsCmdYoutubeView.Enabled = YoutubeViewAvailable();
+            tlsCmdSaveList.Enabled = CanSaveList();
+            tlsCmdRemoveTrack.Enabled = CanRemoveTrack();
+            tlsCmdClearPlaylist.Enabled = CanClearPlaylist();
+            tlsCmdRemovePlaylist.Enabled = CanRemovePlaylist();
+            cmdRenamePlaylist.Enabled = CanRenamePlaylist();
+            cmdPreviousTrack.Enabled = PreviousTrackAvailable();
+            cmdPlay.Enabled = CanPlayTrack();
+            cmdStop.Enabled = CanStopPlayback();
+            cmdNextTrack.Enabled = NextTrackAvailable();
+        }
+        private void UpdatePlaylist()
+        {
+            if(currentPlaylist.Index == -1)
+            {
+                PlaylistManager.AddNewPlaylist(currentPlaylist);
+                lstBoxPlaylists.Items.Add(currentPlaylist.Name);
+            }
+            else
+            {
+                PlaylistManager.UpdateSavedPlaylist(currentPlaylist);
+            }
+
+            string filepath = Path.Combine(PlaylistManager.directory, currentPlaylist.Filename);
+
+            if (File.Exists(filepath))
+            {
+                File.Delete(filepath);
             }
         }
         private void UpdateTrackbar()
@@ -1068,14 +1426,127 @@ namespace YoutubeRadio2016
             trkBDuration.Maximum = Convert.ToInt32(duration.TotalSeconds);
             trkBDuration.Value = trkBDuration.Minimum;
         }
-        private string GetVideoUrlAutoplayTrack()
+
+
+
+        private bool CanClearPlaylist()
         {
-            var doc = new HtmlWeb().Load(currentTrack.VideoUrl);
-
-            string videoID = doc.DocumentNode.SelectSingleNode("//div[@class='content-wrapper']/a").Attributes["href"].Value;
-            string videoUrl = "https://www.youtube.com" + videoID;
-
-            return videoUrl;
+            return currentPlaylist != null && currentPlaylist.SortedPlaylist.Count != 0;
         }
+        private bool CanPlayTrack()
+        {
+            return currentPlaylist != null && currentPlaylist.SortedPlaylist.Count > 0;
+        }
+        private bool CanRemovePlaylist()
+        {
+            return lstBoxPlaylists.SelectedIndex != -1;
+        }
+        private bool CanRemoveTrack()
+        {
+            return (selectedTrack != null);
+        }
+        private bool CanRenamePlaylist()
+        {
+            return currentPlaylist != null;
+        }
+        private bool CanSaveList()
+        {
+            return currentPlaylistChanged;
+        }
+        private bool CanStopPlayback()
+        {
+            return !playbackStopped;
+        }
+        private ListViewItem CreateAudioTrack(string videoUrl, int trackIndex, bool isAutoplayTrack = false)
+        {
+            AudioTrack track = TrackFactory.CreateAudioTrack(videoUrl, trackIndex, isAutoplayTrack);
+            ListViewItem itemToAdd = null;
+
+            if (track != null)
+            {
+                currentPlaylist.AddAudioTrack(track);
+
+                if (settings.Shuffle)
+                {
+                    currentPlaylist.UnplayedTracks.Add(track);
+                }
+
+                itemToAdd = CreateListViewItem(track);
+
+                prgLoadTracks.Value++;
+            }
+
+            return itemToAdd;
+        }
+        private ListViewItem CreateListViewItem(AudioTrack createdTrack)
+        {
+            TimeSpan duration = TimeSpan.FromTicks(createdTrack.Duration);
+            string durationString = duration.ToString("T");
+            string title = createdTrack.Title;
+
+            if (createdTrack.IsAutoplayTrack)
+            {
+                title = "AUTOPLAY: " + title;
+            }
+
+            return new ListViewItem(new[] { title, durationString });          
+        }
+
+        private AudioTrack GetPlaylistsFirstTrack()
+        {
+            AudioTrack trackToPlay;
+
+            if (settings.Shuffle)
+            {
+                AudioPlayer.GetRandomTrack(out trackToPlay);
+            }
+            else
+            {
+                trackToPlay = currentPlaylist.SortedPlaylist[0];
+            }
+
+            return trackToPlay;
+        }
+                
+        private bool NextTrackAvailable()
+        {
+            if (currentPlaylist == null || currentPlaylist.SortedPlaylist.Count == 0)
+            {
+                return false;
+            }
+
+            if (currentPlaylist.SortedPlaylist.Count == 1 && (settings.Autoplay == Autoplay.Off || playbackStopped))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool PreviousTrackAvailable()
+        {
+            return currentPlaylist != null && currentPlaylist.SortedPlaylist.Count > 1;
+        }
+
+        private bool YoutubeViewAvailable()
+        {
+            return currentTrack != null || selectedTrack != null;
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     }
 }

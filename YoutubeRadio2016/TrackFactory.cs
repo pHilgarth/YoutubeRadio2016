@@ -13,222 +13,9 @@ using System.Xml;
 
 namespace YoutubeRadio2016
 {
-    public class TrackFactory
+    public static class TrackFactory
     {
-        public TrackFactory()
-        {
-            Player = new AudioPlayer(this);
-        }
-
-        public AudioPlayer Player { get; set; }
-        public List<AudioTrack> AllAudioTracks { get; set; }
-        
-        public void CreateAudioTrack(out bool loadingSuccessfull, bool autoplayTrack, bool shuffle, int trackIndex, string videoUrl)
-        {
-            var doc = new HtmlWeb().Load(videoUrl);
-
-            try
-            {
-                string title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
-                string endIndicatorTitle = " - YouTube";
-                title = title.Substring(0, title.Length - endIndicatorTitle.Length);
-                title = HttpUtility.HtmlDecode(title);
-
-                string durationCode = doc.DocumentNode.SelectSingleNode("//meta[@itemprop='duration']").Attributes["content"].Value;
-                TimeSpan duration = XmlConvert.ToTimeSpan(durationCode);
-                long durationTicks = duration.Ticks;
-                
-                bool scrambled = false;
-
-                string audioUrl = GetAudioUrl(doc, videoUrl, ref scrambled);
-
-                if(!string.IsNullOrEmpty(audioUrl))
-                {
-                    var track = new AudioTrack(autoplayTrack, trackIndex, audioUrl, title, videoUrl, durationTicks);
-
-                    if (scrambled)
-                    {
-                        track.Scrambled = true;
-                    }
-
-                    AllAudioTracks.Add(track);
-
-                    if (shuffle)
-                    {
-                        Player.UnplayedTracks.Add(track);
-                    }
-
-                    loadingSuccessfull = true;
-                }
-                else
-                {
-                    MessageBox.Show("Das Video enthält keine Definition für \"adaptive_fmts\".\nEs kann nicht auf die Audiospur zugegriffen werden!", "Fehler",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-                    loadingSuccessfull = false;
-                }               
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message); //just for testing
-                loadingSuccessfull = false;
-            }
-        }
-        public List<ListViewItem> LoadTracks(out bool allTracksLoaded, bool autoplayTrack, bool shuffle, int lstVTracksCount, List<string> videoURLs, ProgressBar prgLoadTracks)
-        {
-            int trackIndex = lstVTracksCount;
-            List<ListViewItem> itemsToAdd = new List<ListViewItem>();
-
-            allTracksLoaded = true;
-
-            foreach (string url in videoURLs)
-            {
-                bool loadingSuccessfull;
-
-                CreateAudioTrack(out loadingSuccessfull, autoplayTrack, shuffle, trackIndex, url);
-
-                if (loadingSuccessfull)
-                {
-                    int lastIndex = AllAudioTracks.Count - 1;
-                    AudioTrack createdTrack = AllAudioTracks[lastIndex];
-
-                    TimeSpan duration = TimeSpan.FromTicks(createdTrack.Duration);
-                    string durationString = duration.ToString("T");
-                    string title = createdTrack.Title;
-
-                    if (autoplayTrack)
-                    {
-                        title = "AUTOPLAY: " + title;
-                    }
-
-                    string[] subItems = { title, durationString };
-
-                    itemsToAdd.Add(new ListViewItem(subItems));
-
-                    trackIndex++;
-                }
-                else
-                {
-                    allTracksLoaded = false;
-                }
-
-                prgLoadTracks.Value++;
-            }
-
-            return itemsToAdd;
-        }
-        public List<string> GetVideoUrls(string videoURL)
-        {
-            List<string> videoUrls = new List<string>();
-
-            if (videoURL.Contains("&list="))
-            {
-                GetVideoURLs_Playlist(videoURL, ref videoUrls);
-            }
-            else
-            {
-                videoUrls.Add(videoURL);
-            }
-
-            return videoUrls;
-        }
-
-        private void GetVideoURLs_Playlist(string videoURL, ref List<string> videoURLs)
-        {
-            var document = new HtmlWeb().Load(videoURL);
-
-            try
-            {
-                string playlistLength = document.DocumentNode.SelectSingleNode("//span[@id='playlist-length']").InnerText;
-
-                if (MessageBox.Show(
-                    "Das eingefügte Video befindet sich in einer youtube-Playlist mit insgesamt " + playlistLength +
-                    ".\nMöchten Sie die gesamte Playlist in das Prgoramm laden?", "Playlist gefunden",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                {
-                    videoURLs = LoadPlaylist(document);
-                }
-                else
-                {
-                    videoURLs.Add(videoURL);
-                }
-            }
-            catch (Exception ex)//if "playlist-length" was not found, it's a youtube-Mix with 25 tracks
-            {
-                //MessageBox.Show(ex.Message); //just for testing
-
-                if (MessageBox.Show(
-                    "Das eingefügte Video befindet sich in einem \"youtube-Mix\" mit 25 Videos.\n" +
-                    "Möchten Sie den ganzen Mix in das Programm laden?", "Playlist gefunden",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                {
-                    videoURLs = LoadPlaylist(document);
-                }
-                else
-                {
-                    videoURLs.Add(videoURL);
-                }
-            }
-        }
-        private string DecryptSignature(string videoUrl, string encodedSignature)
-        {
-            WebClient client = new WebClient();
-            string videoHtml = client.DownloadString(videoUrl);
-
-            string playerScriptUrlTemplate = "https://s.ytimg.com/yts/jsbin/player-{0}/base.js";
-            string functionPatternTemplate = @"#NAME#=function\([^)]+\)\{.*?\};";
-            string helperObjectPatternTemplate = @"var #NAME#={.*?};";
-
-            Regex playerVersionRegex = new Regex(@"player-(?<PlayerVersion>[\w\d\-]+)\/base\.js");
-            Regex functionNameRegex = new Regex(@"\w\.set\(""signature"",\s*(?<FunctionName>[$A-Za-z0-9]+)");
-            Regex helperObjectNameRegex = new Regex(@";(?<ObjectName>[$A-Za-z0-9]+)\.");
-
-            string playerVersion = playerVersionRegex.Match(videoHtml).Groups["PlayerVersion"].Value;
-
-            string playerScriptUrl = string.Format(playerScriptUrlTemplate, playerVersion);
-            string playerScriptHtml = client.DownloadString(playerScriptUrl);
-
-            string functionName = functionNameRegex.Match(playerScriptHtml).Groups["FunctionName"].Value;
-            string function = Regex.Match(playerScriptHtml, functionPatternTemplate.Replace("#NAME#", functionName)).Value;
-
-            string helperObjectName = helperObjectNameRegex.Match(function).Groups["ObjectName"].Value;
-            string helperObject = Regex.Match(playerScriptHtml, helperObjectPatternTemplate.Replace("#NAME#", helperObjectName), RegexOptions.Singleline).Value;
-
-            Engine engine = new Engine();
-            Engine decoderScript = engine.Execute(helperObject).Execute(function);
-            var decodedSignature = decoderScript.Invoke(functionName, encodedSignature).ToString();
-
-            return decodedSignature;
-        }
-        private List<string> LoadPlaylist(HtmlAgilityPack.HtmlDocument document)
-        {
-            bool moreVideosAvailable = true;
-            int videoIndex = 0;
-            List<string> videoUrls = new List<string>();
-
-            do
-            {
-                try
-                {
-                    var xpath = "//li[@data-index='" + videoIndex + "']";
-                    var videoID = document.DocumentNode.SelectSingleNode(xpath).Attributes["data-video-id"].Value;
-                    var videoUrl = "https://www.youtube.com/watch?v=" + videoID;
-
-                    videoUrls.Add(videoUrl);
-                    videoIndex++;
-                }
-                catch (Exception ex)
-                {
-                    //MessageBox.Show(ex.Message); //just for testing!
-                    moreVideosAvailable = false;
-                }
-            }
-            while (moreVideosAvailable);
-
-            return videoUrls;
-        }
-
-        public string GetAudioUrl(HtmlAgilityPack.HtmlDocument doc, string videoUrl, ref bool scrambled)
+        public static string GetAudioUrl(HtmlAgilityPack.HtmlDocument doc, string videoUrl, ref bool scrambled)
         {
             string script = doc.DocumentNode.SelectNodes("//script").Select(x => x.InnerHtml).SingleOrDefault(x => x.StartsWith("var ytplayer"));
             string startIndicator = "ytplayer.config = ";
@@ -261,6 +48,172 @@ namespace YoutubeRadio2016
             }
 
             return audioUrl;
-        }
-    }
+        }   //OK
+        public static string GetVideoUrlAutoplayTrack(AudioTrack currentTrack)
+        {
+            var doc = new HtmlWeb().Load(currentTrack.VideoUrl);
+
+            string videoID = doc.DocumentNode.SelectSingleNode("//div[@class='content-wrapper']/a").Attributes["href"].Value;
+            string videoUrl = "https://www.youtube.com" + videoID;
+
+            return videoUrl;            
+        }   //OK
+        public static AudioTrack CreateAudioTrack(string videoUrl, int trackIndex, bool autoplayTrack = false)
+        {
+            AudioTrack track = null;
+            var doc = new HtmlWeb().Load(videoUrl);
+
+            try
+            {
+                string title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
+
+                while (title == "YouTube")
+                {
+                    doc = new HtmlWeb().Load(videoUrl);
+                    title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
+                }
+
+                string endIndicatorTitle = " - YouTube";
+                title = title.Substring(0, title.Length - endIndicatorTitle.Length);
+                title = HttpUtility.HtmlDecode(title);
+
+                string durationCode = doc.DocumentNode.SelectSingleNode("//meta[@itemprop='duration']").Attributes["content"].Value;
+                TimeSpan duration = XmlConvert.ToTimeSpan(durationCode);
+                long durationTicks = duration.Ticks;
+                
+                bool scrambled = false;
+
+                string audioUrl = GetAudioUrl(doc, videoUrl, ref scrambled);
+
+                if(!string.IsNullOrEmpty(audioUrl))
+                {
+                    track = new AudioTrack(autoplayTrack, trackIndex, audioUrl, title, videoUrl, durationTicks);
+
+                    track.Scrambled = scrambled;
+                }
+                else
+                {
+                    MessageBox.Show("Das Video enthält keine Definition für \"adaptive_fmts\".\nEs kann nicht auf die Audiospur zugegriffen werden!", "Fehler",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message); //just for testing
+            }
+
+            return track;
+        }   //OK
+        public static List<string> GetVideoUrls(string videoURL)
+        {
+            List<string> videoUrls = new List<string>();
+
+            if (videoURL.Contains("&list="))
+            {
+                GetVideoURLs_YouTubePlaylist(videoURL, ref videoUrls);
+            }
+            else
+            {
+                videoUrls.Add(videoURL);
+            }
+
+            return videoUrls;
+        }   //OK
+
+        private static void GetVideoURLs_YouTubePlaylist(string videoURL, ref List<string> videoURLs)
+        {
+            var document = new HtmlWeb().Load(videoURL);
+
+            try
+            {
+                string playlistLength = document.DocumentNode.SelectSingleNode("//span[@id='playlist-length']").InnerText;
+
+                if (MessageBox.Show(
+                    "Das eingefügte Video befindet sich in einer youtube-Playlist mit insgesamt " + playlistLength +
+                    ".\nMöchten Sie die gesamte Playlist in das Prgoramm laden?", "Playlist gefunden",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                {
+                    videoURLs = LoadYouTubePlaylist(document);
+                }
+                else
+                {
+                    videoURLs.Add(videoURL);
+                }
+            }
+            catch (Exception ex)//if "playlist-length" was not found, it's a youtube-Mix with 25 tracks
+            {
+                //MessageBox.Show(ex.Message); //just for testing
+
+                if (MessageBox.Show(
+                    "Das eingefügte Video befindet sich in einem \"youtube-Mix\" mit 25 Videos.\n" +
+                    "Möchten Sie den ganzen Mix in das Programm laden?", "Playlist gefunden",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                {
+                    videoURLs = LoadYouTubePlaylist(document);
+                }
+                else
+                {
+                    videoURLs.Add(videoURL);
+                }
+            }
+        }   //OK
+
+        private static string DecryptSignature(string videoUrl, string encodedSignature)
+        {
+            WebClient client = new WebClient();
+            string videoHtml = client.DownloadString(videoUrl);
+
+            string playerScriptUrlTemplate = "https://s.ytimg.com/yts/jsbin/player-{0}/base.js";
+            string functionPatternTemplate = @"#NAME#=function\([^)]+\)\{.*?\};";
+            string helperObjectPatternTemplate = @"var #NAME#={.*?};";
+
+            Regex playerVersionRegex = new Regex(@"player-(?<PlayerVersion>[\w\d\-\/]+)\/base\.js");
+            Regex functionNameRegex = new Regex(@"\w\.set\(""signature"",\s*(?<FunctionName>[$A-Za-z0-9]+)");
+            Regex helperObjectNameRegex = new Regex(@";(?<ObjectName>[$A-Za-z0-9]+)\.");
+
+            string playerVersion = playerVersionRegex.Match(videoHtml).Groups["PlayerVersion"].Value;
+
+            string playerScriptUrl = string.Format(playerScriptUrlTemplate, playerVersion);
+            string playerScriptHtml = client.DownloadString(playerScriptUrl);
+
+            string functionName = functionNameRegex.Match(playerScriptHtml).Groups["FunctionName"].Value;
+            string function = Regex.Match(playerScriptHtml, functionPatternTemplate.Replace("#NAME#", functionName)).Value;
+
+            string helperObjectName = helperObjectNameRegex.Match(function).Groups["ObjectName"].Value;
+            string helperObject = Regex.Match(playerScriptHtml, helperObjectPatternTemplate.Replace("#NAME#", helperObjectName), RegexOptions.Singleline).Value;
+
+            Engine engine = new Engine();
+            Engine decoderScript = engine.Execute(helperObject).Execute(function);
+            var decodedSignature = decoderScript.Invoke(functionName, encodedSignature).ToString();
+
+            return decodedSignature;
+        }   //OK
+        private static List<string> LoadYouTubePlaylist(HtmlAgilityPack.HtmlDocument document)
+        {
+            bool moreVideosAvailable = true;
+            int videoIndex = 0;
+            List<string> videoUrls = new List<string>();
+
+            do
+            {
+                try
+                {
+                    var xpath = "//li[@data-index='" + videoIndex + "']";
+                    var videoID = document.DocumentNode.SelectSingleNode(xpath).Attributes["data-video-id"].Value;
+                    var videoUrl = "https://www.youtube.com/watch?v=" + videoID;
+
+                    videoUrls.Add(videoUrl);
+                    videoIndex++;
+                }
+                catch (Exception ex)
+                {
+                    //MessageBox.Show(ex.Message); //just for testing!
+                    moreVideosAvailable = false;
+                }
+            }
+            while (moreVideosAvailable);
+
+            return videoUrls;
+        }   //OK
+    }   //OK
 }

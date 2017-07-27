@@ -1,0 +1,1 @@
+﻿public enum Repeat { RepeatOne, RepeatAll, RepeatOff }

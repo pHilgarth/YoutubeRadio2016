@@ -1,62 +1,110 @@
 ﻿using HtmlAgilityPack;
 using NAudio.Wave;
 using System;
-using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace YoutubeRadio2016
 {
     public class AudioPlayer
     {
-        public AudioPlayer(TrackFactory trackFactory)
+        public AudioPlayer()
         {
-            ShuffledPlaylist = new List<AudioTrack>();
-            UnplayedTracks = new List<AudioTrack>();
-            TrackFactory = trackFactory;
-        }
+        }       //OK
+        
+        public static MediaFoundationReader MediaReader { get; set; }
+        public static WaveOutEvent WaveOut { get; set; }
 
-        public AudioTrack CurrentTrack { get; set; }
-        public List<AudioTrack> AllAudioTracks { get; set; }
-        public List<AudioTrack> ShuffledPlaylist { get; set; }
-        public List<AudioTrack> UnplayedTracks { get; set; }
-        public MediaFoundationReader MediaReader { get; set; }
-        public TrackFactory TrackFactory { get; set; }
-        public WaveOutEvent WaveOut { get; set; }
-
-        public void GetNextTrack(ref AudioTrack nextTrack, bool buttonPressed, Settings settings, AudioTrack selectedTrack = null)
+        public static AudioTrack GetNextTrack(bool trackChangeByUserInput, Settings settings, AudioTrack selectedTrack = null, string videoUrl = null)
         {
-            if (buttonPressed)
+            if (WaveOut != null)
             {
-                NextTrack_Manual(ref nextTrack, selectedTrack, settings);
+                WaveOut.Stop();
+            }
+
+            AudioTrack nextTrack;
+
+            //new code (handling the case, an autoplayTrack is / was playing and user toggled repeat on
+
+            
+
+            //former code
+            if (settings.Autoplay != Autoplay.Off)
+            {
+                int trackIndex = PlaylistManager.CurrentPlaylist.SortedPlaylist.Count;
+
+                nextTrack = TrackFactory.CreateAudioTrack(videoUrl, trackIndex, true);
             }
             else
             {
-                NextTrack_Automatic(ref nextTrack, settings);
+                if (trackChangeByUserInput)
+                {
+                    if (settings.Shuffle)
+                    {
+                        NextTrackByUserInput_Shuffle(out nextTrack, selectedTrack);
+                    }
+                    else
+                    {
+                        NextTrackByUserInput_Sorted(out nextTrack, selectedTrack);
+                    }
+                }
+                else
+                {
+                    if (settings.Repeat == Repeat.RepeatOne)
+                    {
+                        nextTrack = PlaylistManager.CurrentPlaylist.CurrentTrack;
+                    }
+                    else
+                    {
+                        if (settings.Shuffle)
+                        {
+                            NextTrackAutomatic_Shuffle(out nextTrack, settings);
+                        }
+                        else
+                        {
+                            NextTrackAutomatic_Sorted(out nextTrack, settings);
+                        }
+                    }
+                }
             }
-        }
-        public void GetPreviousTrack(ref AudioTrack previousTrack, AudioTrack selectedTrack, Settings settings)
+
+            return nextTrack;
+        }   //OK
+        public static AudioTrack GetPreviousTrack(Settings settings, AudioTrack selectedTrack)
         {
+            if (WaveOut != null)
+            {
+                WaveOut.Stop();
+            }
+
+            AudioTrack previousTrack;
+
             if (settings.Shuffle)
             {
-                PreviousTrack_Shuffle(ref previousTrack, selectedTrack);
+                PreviousTrack_Shuffle(out previousTrack, selectedTrack);
             }
             else
             {
-                PreviousTrack_Sorted(ref previousTrack, selectedTrack);
+                PreviousTrack_Sorted(out previousTrack, selectedTrack);
             }
-        }
-        public void GetRandomTrack(ref AudioTrack nextTrack)
+
+            return previousTrack;
+        }   //OK
+
+        public static void GetRandomTrack(out AudioTrack randomTrack)
         {
+            if(PlaylistManager.CurrentPlaylist.UnplayedTracks.Count == 0)
+            {
+                PlaylistManager.CurrentPlaylist.UnplayedTracks.AddRange(PlaylistManager.CurrentPlaylist.SortedPlaylist);
+            }
+
             Random random = new Random();
-            int maxValue = UnplayedTracks.Count;
+            int maxValue = PlaylistManager.CurrentPlaylist.UnplayedTracks.Count;
             int randomIndex = random.Next(0, maxValue);
 
-            nextTrack = UnplayedTracks[randomIndex];
-            UnplayedTracks.RemoveAt(randomIndex);
-            ShuffledPlaylist.Add(nextTrack);
-            nextTrack.IndexShuffledList = ShuffledPlaylist.Count - 1;
-        }
-        public void PlayTrack(AudioTrack trackToPlay, bool mute, float volume, out bool audioUrlUnaccessible)
+            randomTrack = PlaylistManager.CurrentPlaylist.UnplayedTracks[randomIndex];
+            PlaylistManager.CurrentPlaylist.UnplayedTracks.RemoveAt(randomIndex);            
+        }   //OK
+        public static void PlayTrack(AudioTrack trackToPlay, bool mute, float volume, out bool audioUrlUnaccessible)
         {
             audioUrlUnaccessible = false;
 
@@ -95,94 +143,50 @@ namespace YoutubeRadio2016
             {
                 MessageBox.Show(ex.Message);
             }       
-        }
-        public void FillUnplayedTracksList()
-        {
-            foreach (AudioTrack track in AllAudioTracks)
-            {
-                UnplayedTracks.Add(track);
-            }
-        }
+        }   //OK
         
-        private void NextTrack_Automatic(ref AudioTrack nextTrack, Settings settings)
+        private static void NextTrackAutomatic_Shuffle(out AudioTrack nextTrack, Settings settings)
         {
-            if (settings.Repeat == Repeat.RepeatOne)
-            {
-                nextTrack = CurrentTrack;
-            }
-            else
-            {
-                NextTrack_Automatic_NoRepeatOne(ref nextTrack, settings);
-            }
-        }
-        private void NextTrack_Automatic_NoRepeatOne(ref AudioTrack nextTrack, Settings settings)
-        {
-            if (settings.Shuffle)
-            {
-                NextTrack_Automatic_Shuffle(ref nextTrack, settings);
-            }
-            else
-            {
-                NextTrack_Automatic_Sorted(ref nextTrack, settings);
-            }
-        }
-        private void NextTrack_Automatic_Shuffle(ref AudioTrack nextTrack, Settings settings)
-        {
-            int lastIndexShuffledList = ShuffledPlaylist.Count - 1;
-            int trackIndex = CurrentTrack.IndexShuffledList;
+            int trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexShuffledList;
+            int lastIndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;            
+
+            nextTrack = null;
 
             if (trackIndex != lastIndexShuffledList)
             {
-                nextTrack = ShuffledPlaylist[trackIndex + 1];
+                nextTrack = PlaylistManager.CurrentPlaylist.ShuffledPlaylist[trackIndex + 1];
             }
             else
             {
-                if (UnplayedTracks.Count != 0)
+                if (PlaylistManager.CurrentPlaylist.UnplayedTracks.Count != 0 || settings.Repeat == Repeat.RepeatAll)
                 {
-                    GetRandomTrack(ref nextTrack);
-                }
-                else
-                {
-                    if (settings.Repeat == Repeat.RepeatAll)
-                    {
-                        FillUnplayedTracksList();
-                        GetRandomTrack(ref nextTrack);
-                    }
-                }
+                    GetRandomTrack(out nextTrack);
+
+                    PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Add(nextTrack);
+                    nextTrack.IndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;
+                }                
             }
-        }
-        private void NextTrack_Automatic_Sorted(ref AudioTrack nextTrack, Settings settings)
+        }   //OK
+        private static void NextTrackAutomatic_Sorted(out AudioTrack nextTrack, Settings settings)
         {
-            int lastIndexSortedList = AllAudioTracks.Count - 1;
-            int trackIndex = CurrentTrack.IndexSortedList;
+            int lastIndexSortedList = PlaylistManager.CurrentPlaylist.SortedPlaylist.Count - 1;
+            int trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexSortedList;
+
+            nextTrack = null;
 
             if (trackIndex != lastIndexSortedList)
             {
-                nextTrack = AllAudioTracks[trackIndex + 1];
+                nextTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[trackIndex + 1];
             }
-            else
+            else if (settings.Repeat == Repeat.RepeatAll)
             {
-                if (settings.Repeat == Repeat.RepeatAll)
-                {
-                    nextTrack = AllAudioTracks[0];
-                }
+                nextTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[0];
             }
-        }
-        private void NextTrack_Manual(ref AudioTrack nextTrack, AudioTrack selectedTrack, Settings settings)
-        {
-            if (settings.Shuffle)
-            {
-                NextTrack_Manual_ShuffleRepeatAll(ref nextTrack, selectedTrack);
-            }
-            else
-            {
-                NextTrack_Manual_SortedRepeatAll(ref nextTrack, selectedTrack);
-            }
-        }
-        private void NextTrack_Manual_ShuffleRepeatAll(ref AudioTrack nextTrack, AudioTrack selectedTrack)
+        }   //OK
+        private static void NextTrackByUserInput_Shuffle(out AudioTrack nextTrack, AudioTrack selectedTrack)
         {
             int trackIndex;
-            int lastIndexShuffledList = ShuffledPlaylist.Count - 1;
+            int lastIndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;
             
             if (selectedTrack != null)
             {
@@ -190,30 +194,25 @@ namespace YoutubeRadio2016
             }
             else
             {
-                trackIndex = CurrentTrack.IndexShuffledList;
+                trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexShuffledList;
             }
 
             if (trackIndex != lastIndexShuffledList)
             {
-                nextTrack = ShuffledPlaylist[trackIndex + 1];
+                nextTrack = PlaylistManager.CurrentPlaylist.ShuffledPlaylist[trackIndex + 1];
             }
             else
             {
-                if (UnplayedTracks.Count != 0)
-                {
-                    GetRandomTrack(ref nextTrack);
-                }
-                else
-                {
-                    FillUnplayedTracksList();
-                    GetRandomTrack(ref nextTrack);
-                }
+                GetRandomTrack(out nextTrack);
+
+                PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Add(nextTrack);
+                nextTrack.IndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;
             }
-        }
-        private void NextTrack_Manual_SortedRepeatAll(ref AudioTrack nextTrack, AudioTrack selectedTrack)
+        }   //OK
+        private static void NextTrackByUserInput_Sorted(out AudioTrack nextTrack, AudioTrack selectedTrack)
         {
             int trackIndex;
-            int lastIndexAllTracks = AllAudioTracks.Count - 1;
+            int lastIndexAllTracks = PlaylistManager.CurrentPlaylist.SortedPlaylist.Count - 1;
 
             if (selectedTrack != null)
             {
@@ -221,19 +220,19 @@ namespace YoutubeRadio2016
             }
             else
             {
-                trackIndex = CurrentTrack.IndexSortedList;
+                trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexSortedList;
             }
 
             if (trackIndex != lastIndexAllTracks)
             {
-                nextTrack = AllAudioTracks[trackIndex + 1];
+                nextTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[trackIndex + 1];
             }
             else
             {
-                nextTrack = AllAudioTracks[0];
+                nextTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[0];
             }
-        }
-        private void PreviousTrack_Shuffle(ref AudioTrack previousTrack, AudioTrack selectedTrack)
+        }   //OK
+        private static void PreviousTrack_Shuffle(out AudioTrack previousTrack, AudioTrack selectedTrack)
         {
             int trackIndex = 0;
 
@@ -241,44 +240,50 @@ namespace YoutubeRadio2016
             {
                 trackIndex = selectedTrack.IndexShuffledList;
             }
-            else if(CurrentTrack != null)
+            else
             {
-                trackIndex = CurrentTrack.IndexShuffledList;
+                trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexShuffledList;
             }
 
             if (trackIndex != 0)
             {
-                previousTrack = ShuffledPlaylist[trackIndex - 1];
+                previousTrack = PlaylistManager.CurrentPlaylist.ShuffledPlaylist[trackIndex - 1];
             }
             else
             {
-                int lastIndexShuffledPlaylist = ShuffledPlaylist.Count - 1;
+                GetRandomTrack(out previousTrack);
 
-                previousTrack = ShuffledPlaylist[lastIndexShuffledPlaylist];
+                PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Insert(0, previousTrack);
+
+                for(int index = 0; index < PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count; index++)
+                {
+                    PlaylistManager.CurrentPlaylist.ShuffledPlaylist[index].IndexShuffledList = index;
+                }
             }
-        }
-        private void PreviousTrack_Sorted(ref AudioTrack previousTrack, AudioTrack selectedTrack)
+        }   //OK
+        private static void PreviousTrack_Sorted(out AudioTrack previousTrack, AudioTrack selectedTrack)
         {
-            int trackIndex = 0;
-            int lastIndexAllTracks = AllAudioTracks.Count - 1;
+            int trackIndex = 0;            
 
             if (selectedTrack != null)
             {
                 trackIndex = selectedTrack.IndexSortedList;
             }
-            else if (CurrentTrack != null)
+            else
             {
-                trackIndex = CurrentTrack.IndexSortedList;
+                trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexSortedList;
             }
 
             if (trackIndex != 0)
             {
-                previousTrack = AllAudioTracks[trackIndex - 1];
+                previousTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[trackIndex - 1];
             }
             else
             {
-                previousTrack = AllAudioTracks[lastIndexAllTracks];
+                int lastIndexAllTracks = PlaylistManager.CurrentPlaylist.SortedPlaylist.Count - 1;
+
+                previousTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[lastIndexAllTracks];
             }
-        }
-    }
+        }   //OK
+    }   //OK
 }

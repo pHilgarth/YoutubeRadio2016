@@ -1,0 +1,1 @@
+﻿public enum NextSongConditions { ShuffleRepeatOne, ShuffleRepeatAll, ShuffleOnly, RepeatOne, RepeatAll, Default }
