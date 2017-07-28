@@ -9,27 +9,29 @@ namespace YoutubeRadio2016
     {
         public AudioPlayer()
         {
-        }       //OK
+        }
         
         public static MediaFoundationReader MediaReader { get; set; }
         public static WaveOutEvent WaveOut { get; set; }
 
-        public static AudioTrack GetNextTrack(bool trackChangeByUserInput, Settings settings, AudioTrack selectedTrack = null, string videoUrl = null)
+        public static AudioTrack GetNextTrack(bool trackChangeByUserInput, Settings settings, string videoUrl, AudioTrack selectedTrack = null)
         {
             if (WaveOut != null)
             {
                 WaveOut.Stop();
             }
 
+            if (settings.Shuffle &&
+                PlaylistManager.CurrentPlaylist.UnplayedTracks.Count == 0 && PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count == 0)
+            {
+                PlaylistManager.CurrentPlaylist.UnplayedTracks.AddRange(PlaylistManager.CurrentPlaylist.SortedPlaylist);
+            }
+
             AudioTrack nextTrack;
 
-            //new code (handling the case, an autoplayTrack is / was playing and user toggled repeat on
-
-            
-
-            //former code
             if (settings.Autoplay != Autoplay.Off)
             {
+                
                 int trackIndex = PlaylistManager.CurrentPlaylist.SortedPlaylist.Count;
 
                 nextTrack = TrackFactory.CreateAudioTrack(videoUrl, trackIndex, true);
@@ -68,7 +70,7 @@ namespace YoutubeRadio2016
             }
 
             return nextTrack;
-        }   //OK
+        }
         public static AudioTrack GetPreviousTrack(Settings settings, AudioTrack selectedTrack)
         {
             if (WaveOut != null)
@@ -88,22 +90,17 @@ namespace YoutubeRadio2016
             }
 
             return previousTrack;
-        }   //OK
+        }
 
         public static void GetRandomTrack(out AudioTrack randomTrack)
         {
-            if(PlaylistManager.CurrentPlaylist.UnplayedTracks.Count == 0)
-            {
-                PlaylistManager.CurrentPlaylist.UnplayedTracks.AddRange(PlaylistManager.CurrentPlaylist.SortedPlaylist);
-            }
-
             Random random = new Random();
             int maxValue = PlaylistManager.CurrentPlaylist.UnplayedTracks.Count;
             int randomIndex = random.Next(0, maxValue);
 
             randomTrack = PlaylistManager.CurrentPlaylist.UnplayedTracks[randomIndex];
             PlaylistManager.CurrentPlaylist.UnplayedTracks.RemoveAt(randomIndex);            
-        }   //OK
+        }
         public static void PlayTrack(AudioTrack trackToPlay, bool mute, float volume, out bool audioUrlUnaccessible)
         {
             audioUrlUnaccessible = false;
@@ -143,7 +140,7 @@ namespace YoutubeRadio2016
             {
                 MessageBox.Show(ex.Message);
             }       
-        }   //OK
+        }
         
         private static void NextTrackAutomatic_Shuffle(out AudioTrack nextTrack, Settings settings)
         {
@@ -158,15 +155,19 @@ namespace YoutubeRadio2016
             }
             else
             {
-                if (PlaylistManager.CurrentPlaylist.UnplayedTracks.Count != 0 || settings.Repeat == Repeat.RepeatAll)
+                if (PlaylistManager.CurrentPlaylist.UnplayedTracks.Count != 0)
                 {
                     GetRandomTrack(out nextTrack);
 
                     PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Add(nextTrack);
                     nextTrack.IndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;
-                }                
+                }
+                else if (settings.Repeat == Repeat.RepeatAll)
+                {
+                    nextTrack = PlaylistManager.CurrentPlaylist.ShuffledPlaylist[0];
+                }
             }
-        }   //OK
+        }
         private static void NextTrackAutomatic_Sorted(out AudioTrack nextTrack, Settings settings)
         {
             int lastIndexSortedList = PlaylistManager.CurrentPlaylist.SortedPlaylist.Count - 1;
@@ -182,7 +183,7 @@ namespace YoutubeRadio2016
             {
                 nextTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[0];
             }
-        }   //OK
+        }
         private static void NextTrackByUserInput_Shuffle(out AudioTrack nextTrack, AudioTrack selectedTrack)
         {
             int trackIndex;
@@ -203,12 +204,19 @@ namespace YoutubeRadio2016
             }
             else
             {
-                GetRandomTrack(out nextTrack);
+                if (PlaylistManager.CurrentPlaylist.UnplayedTracks.Count != 0)
+                {
+                    GetRandomTrack(out nextTrack);
 
-                PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Add(nextTrack);
-                nextTrack.IndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;
+                    PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Add(nextTrack);
+                    nextTrack.IndexShuffledList = PlaylistManager.CurrentPlaylist.ShuffledPlaylist.Count - 1;
+                }
+                else
+                {
+                    nextTrack = PlaylistManager.CurrentPlaylist.ShuffledPlaylist[0];
+                }
             }
-        }   //OK
+        }
         private static void NextTrackByUserInput_Sorted(out AudioTrack nextTrack, AudioTrack selectedTrack)
         {
             int trackIndex;
@@ -231,7 +239,7 @@ namespace YoutubeRadio2016
             {
                 nextTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[0];
             }
-        }   //OK
+        }
         private static void PreviousTrack_Shuffle(out AudioTrack previousTrack, AudioTrack selectedTrack)
         {
             int trackIndex = 0;
@@ -245,7 +253,7 @@ namespace YoutubeRadio2016
                 trackIndex = PlaylistManager.CurrentPlaylist.CurrentTrack.IndexShuffledList;
             }
 
-            if (trackIndex != 0)
+            if (trackIndex > 0)
             {
                 previousTrack = PlaylistManager.CurrentPlaylist.ShuffledPlaylist[trackIndex - 1];
             }
@@ -260,7 +268,7 @@ namespace YoutubeRadio2016
                     PlaylistManager.CurrentPlaylist.ShuffledPlaylist[index].IndexShuffledList = index;
                 }
             }
-        }   //OK
+        }
         private static void PreviousTrack_Sorted(out AudioTrack previousTrack, AudioTrack selectedTrack)
         {
             int trackIndex = 0;            
@@ -284,6 +292,6 @@ namespace YoutubeRadio2016
 
                 previousTrack = PlaylistManager.CurrentPlaylist.SortedPlaylist[lastIndexAllTracks];
             }
-        }   //OK
-    }   //OK
+        }
+    }
 }

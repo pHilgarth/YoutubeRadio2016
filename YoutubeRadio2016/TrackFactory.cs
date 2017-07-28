@@ -15,6 +15,7 @@ namespace YoutubeRadio2016
 {
     public static class TrackFactory
     {
+
         public static string GetAudioUrl(HtmlAgilityPack.HtmlDocument doc, string videoUrl, ref bool scrambled)
         {
             string script = doc.DocumentNode.SelectNodes("//script").Select(x => x.InnerHtml).SingleOrDefault(x => x.StartsWith("var ytplayer"));
@@ -48,16 +49,33 @@ namespace YoutubeRadio2016
             }
 
             return audioUrl;
-        }   //OK
+        }
         public static string GetVideoUrlAutoplayTrack(AudioTrack currentTrack)
         {
             var doc = new HtmlWeb().Load(currentTrack.VideoUrl);
 
-            string videoID = doc.DocumentNode.SelectSingleNode("//div[@class='content-wrapper']/a").Attributes["href"].Value;
-            string videoUrl = "https://www.youtube.com" + videoID;
+            string videoUrl = null;
+
+            try
+            {
+                List<string> videoUrls =
+                    doc.DocumentNode.SelectNodes("//div[@class='content-wrapper']/a").Select(x => x.Attributes["href"].Value).ToList();
+
+
+                Random random = new Random();
+                int maxValue = videoUrls.Count;
+                int randomIndex = random.Next(0, maxValue);
+                string videoID = videoUrls[randomIndex];
+
+                videoUrl = "https://www.youtube.com" + videoID;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
 
             return videoUrl;            
-        }   //OK
+        }
         public static AudioTrack CreateAudioTrack(string videoUrl, int trackIndex, bool autoplayTrack = false)
         {
             AudioTrack track = null;
@@ -66,11 +84,19 @@ namespace YoutubeRadio2016
             try
             {
                 string title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
+                int errorCount = 0;
 
                 while (title == "YouTube")
                 {
+                    errorCount++;
+
                     doc = new HtmlWeb().Load(videoUrl);
                     title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
+
+                    if(errorCount == 3)
+                    {
+                        return null;
+                    }
                 }
 
                 string endIndicatorTitle = " - YouTube";
@@ -103,7 +129,7 @@ namespace YoutubeRadio2016
             }
 
             return track;
-        }   //OK
+        }
         public static List<string> GetVideoUrls(string videoURL)
         {
             List<string> videoUrls = new List<string>();
@@ -118,7 +144,7 @@ namespace YoutubeRadio2016
             }
 
             return videoUrls;
-        }   //OK
+        }
 
         private static void GetVideoURLs_YouTubePlaylist(string videoURL, ref List<string> videoURLs)
         {
@@ -156,7 +182,7 @@ namespace YoutubeRadio2016
                     videoURLs.Add(videoURL);
                 }
             }
-        }   //OK
+        }
 
         private static string DecryptSignature(string videoUrl, string encodedSignature)
         {
@@ -187,7 +213,7 @@ namespace YoutubeRadio2016
             var decodedSignature = decoderScript.Invoke(functionName, encodedSignature).ToString();
 
             return decodedSignature;
-        }   //OK
+        }
         private static List<string> LoadYouTubePlaylist(HtmlAgilityPack.HtmlDocument document)
         {
             bool moreVideosAvailable = true;
@@ -214,6 +240,6 @@ namespace YoutubeRadio2016
             while (moreVideosAvailable);
 
             return videoUrls;
-        }   //OK
-    }   //OK
+        }
+    }
 }

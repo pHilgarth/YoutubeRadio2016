@@ -17,6 +17,13 @@ namespace YoutubeRadio2016
         private static char[] invalidChars = Path.GetInvalidFileNameChars();
         private static string[] blockedNames = { "(Neue Playlist)", "(Keine Playlist)" };
         
+        private static void UpdatePlaylistIndices(int startingIndex)
+        {
+            for (int index = startingIndex; index < SavedPlaylists.Count; index++)
+            {
+                SavedPlaylists[index].Index--;
+            }
+        }
         public static void AddNewPlaylist(Playlist newPlaylist)
         {
             newPlaylist.Filename = newPlaylist.Name + ".xml";
@@ -27,6 +34,8 @@ namespace YoutubeRadio2016
         public static void RemovePlaylist(Playlist playlistToRemove)
         {
             SavedPlaylists.Remove(playlistToRemove);
+
+            UpdatePlaylistIndices(playlistToRemove.Index);
 
             string filepath = Path.Combine(directory, playlistToRemove.Filename);
 
@@ -40,11 +49,14 @@ namespace YoutubeRadio2016
             string filepath = Path.Combine(directory, CurrentPlaylist.Filename);
             List<string> videoUrls = CurrentPlaylist.SortedPlaylist.Select(x => x.VideoUrl).ToList();
 
-            int lastIndex = CurrentPlaylist.SortedPlaylist.Count - 1;
+            if (CurrentPlaylist.SortedPlaylist.Count != 0)
+            {                
+                int lastIndex = CurrentPlaylist.SortedPlaylist.Count - 1;
 
-            if(CurrentPlaylist.SortedPlaylist[lastIndex].IsAutoplayTrack)
-            {
-                videoUrls.RemoveAt(lastIndex);
+                if (CurrentPlaylist.SortedPlaylist[lastIndex].IsAutoplayTrack)
+                {
+                    videoUrls.RemoveAt(lastIndex);
+                }
             }
 
             using (FileStream stream = new FileStream(filepath, FileMode.Create))

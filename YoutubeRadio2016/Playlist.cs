@@ -8,12 +8,16 @@ namespace YoutubeRadio2016
         {
             VideoUrls = new List<string>();
             SortedPlaylist = new List<AudioTrack>();
+            ShuffledPlaylist = new List<AudioTrack>();
+            UnplayedTracks = new List<AudioTrack>();
             Index = -1;
         }
         public Playlist(string playlistName)
         {
             VideoUrls = new List<string>();
             SortedPlaylist = new List<AudioTrack>();
+            ShuffledPlaylist = new List<AudioTrack>();
+            UnplayedTracks = new List<AudioTrack>();
             Index = -1;
             Name = playlistName;
         }
@@ -30,7 +34,7 @@ namespace YoutubeRadio2016
         public void AddAudioTrack(AudioTrack trackToAdd)
         {
             SortedPlaylist.Add(trackToAdd);
-        }   //OK
+        }
         public void ClearAudioTracks()
         {
             SortedPlaylist.Clear();
@@ -40,7 +44,7 @@ namespace YoutubeRadio2016
                 ShuffledPlaylist.Clear();
                 UnplayedTracks.Clear();
             }
-        }   //OK
+        }
         public void RemoveAudioTrack(AudioTrack trackToRemove, bool shuffle)
         {
             RemoveTrackFromAllTracksList(trackToRemove);
@@ -56,7 +60,7 @@ namespace YoutubeRadio2016
                     RemoveTrackFromShuffledPlaylist(trackToRemove);
                 }
             }
-        }   //OK
+        }
 
         private void RemoveTrackFromAllTracksList(AudioTrack trackToRemove)
         {
@@ -66,7 +70,7 @@ namespace YoutubeRadio2016
             {
                 SortedPlaylist[index].IndexSortedList--;
             }
-        }   //OK
+        }
         private void RemoveTrackFromShuffledPlaylist(AudioTrack trackToRemove)
         {
             ShuffledPlaylist.RemoveAt(trackToRemove.IndexShuffledList);
@@ -77,7 +81,7 @@ namespace YoutubeRadio2016
 
                 trackToUpdate.IndexShuffledList--;
             }
-        }   //OK
+        }
         private void RemoveTrackFromUnplayedTracksList(AudioTrack trackToRemove, ref bool trackFound)
         {
             for (int index = 0; index < UnplayedTracks.Count; index++)
@@ -93,6 +97,6 @@ namespace YoutubeRadio2016
                     break;
                 }
             }
-        }   //OK
-    }   //OK
+        }
+    }
 }

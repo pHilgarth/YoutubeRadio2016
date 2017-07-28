@@ -11,20 +11,20 @@ namespace YoutubeRadio2016
 
         public bool Shuffle { get; set; }
         public float Volume { get; set; }
-        public string LastUsedPlaylist { get; set; }
+        public string FilepathLastUsedPlaylist { get; set; }
         public Autoplay Autoplay { get; set; }
         public Repeat Repeat { get; set; }
                 
         public Settings()
         {
-        }   //OK
+        }
         public Settings(bool shuffle, Autoplay autoplay, Repeat repeat, float volume)
         {
             Shuffle = shuffle;
             Autoplay = autoplay;
             Repeat = repeat;
             Volume = volume;
-        }   //OK
+        }
         
         public static void SerializeSettings(Settings settings)
         {
@@ -37,7 +37,7 @@ namespace YoutubeRadio2016
 
                 serializer.Serialize(writer, settings);
             }
-        }   //OK
+        }
         public static Settings DeserializeSettings(bool firstRun)
         {
             string filepath = Path.Combine(directory, "settings.xml");

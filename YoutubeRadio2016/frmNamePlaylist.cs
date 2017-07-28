@@ -36,7 +36,7 @@ namespace YoutubeRadio2016
                 txtPlaylistName.SelectAll();
                 txtPlaylistName.Focus();
             }            
-        }   //OK
+        }
         private void frmNamePlaylist_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (!nameConfirmed)
@@ -50,6 +50,6 @@ namespace YoutubeRadio2016
                     e.Cancel = true;
                 }
             }
-        }   //OK
-    }   //OK
+        }
+    }
 }

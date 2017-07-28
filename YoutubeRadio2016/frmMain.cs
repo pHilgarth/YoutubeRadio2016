@@ -5,35 +5,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Web;
 using System.Windows.Forms;
 
 namespace YoutubeRadio2016
 {
     public partial class frmMain : Form
-    {
-        //NEXT STEP:
-        //
-        //      rework "GetCurrentPlaylist()"; shouldnt get a string param, all playlists are serialized before, in the load sequence.
-        //
-        //
-        //things to take care of: 
-
-        //      whenever a playlist is loaded, all the audioTracks have to be created new, for the audioUrl might expire
-        //          - that means, I have to handle the case, an audioUrl became invalid and the track won't work anymore
-
-        //      after removing a playlist, update the other playlists indices
-
-        //      check the right usage of the properties Playlist.Filename and Playlist.Name
-        //          - only use Filename, when working at the listBoxPlaylists, for the listBox' entries are the Filenames, the playlists are saved as
-        //          - Name is the current playlistName - might differ from Filename, e. g. right after renaming the playlist
-
-        //      if currentPlaylist was changed, add a * to the name in the listBoxPlaylists as well
-        //      highlight currentPlaylist in listBox;
-        //      'playbackStopped' is set to false at the end at "cmdPlay_Click()" - what, if playing a track fails? 'playbackStopped' would set to false anyway.
-        //
-                
+    {                
         bool currentPlaylistChanged = false;
         bool mute = false;
         bool muteButtonClicked = false;
@@ -113,12 +91,12 @@ namespace YoutubeRadio2016
                     PlaylistManager.CurrentPlaylist = new Playlist();
                     currentPlaylist = PlaylistManager.CurrentPlaylist;
 
-                    currentPlaylist.Name = "(Neue Playlist)";
-                    txtPlaylistName.Text = currentPlaylist.Name;
-                    Text = currentPlaylist.Name;
+                    txtPlaylistName.Text = "(Neue Playlist)";
+                    Text = txtPlaylistName.Text;
                 }
 
                 List<string> videoUrls = TrackFactory.GetVideoUrls(videoUrl);
+                currentPlaylist.VideoUrls.AddRange(videoUrls);
 
                 LoadTracks(videoUrls);
 
@@ -137,7 +115,7 @@ namespace YoutubeRadio2016
                         var indexCurrentPlaylist = lstBoxPlaylists.Items.IndexOf(shortFilename);
 
                         lstBoxPlaylists.Items[indexCurrentPlaylist] += "*";
-                    }                    
+                    }
                 }
 
                 UpdateButtons();
@@ -198,7 +176,7 @@ namespace YoutubeRadio2016
             tmrPlayTrack.Stop();
             trkBDuration.Enabled = false;
 
-            ChangeTrack(AudioPlayer.GetNextTrack(true, settings, videoUrl: videoUrlAutoplayTrack));
+            ChangeTrack(AudioPlayer.GetNextTrack(true, settings, videoUrlAutoplayTrack));
 
             if (!playbackStopped)
             {
@@ -346,7 +324,7 @@ namespace YoutubeRadio2016
                     }
                 }
 
-                settings.LastUsedPlaylist = Path.Combine(PlaylistManager.directory, currentPlaylist.Filename);
+                settings.FilepathLastUsedPlaylist = Path.Combine(PlaylistManager.directory, currentPlaylist.Filename);
             }           
 
             settings.Volume = volume;
@@ -382,7 +360,7 @@ namespace YoutubeRadio2016
 
             PlaylistManager.SavedPlaylists = new List<Playlist>();
             GetPlaylists();
-            GetCurrentPlaylist(settings.LastUsedPlaylist);
+            GetCurrentPlaylist(settings.FilepathLastUsedPlaylist);
 
             if(currentPlaylist != null)
             {
@@ -452,8 +430,7 @@ namespace YoutubeRadio2016
                     ClearListViewTracks();
                 }
 
-                var playlistName = lstBoxPlaylists.Items[lstBoxPlaylists.SelectedIndex].ToString();
-
+                string playlistName = lstBoxPlaylists.Items[lstBoxPlaylists.SelectedIndex].ToString();
                 string filepath = Path.Combine(PlaylistManager.directory, playlistName + ".xml");
 
                 GetCurrentPlaylist(filepath);
@@ -480,6 +457,12 @@ namespace YoutubeRadio2016
         }   
         private void lstVTracks_MouseDoubleClick(object sender, MouseEventArgs e)
         {
+            if (currentPlaylist != null)
+            {
+                currentPlaylist.ShuffledPlaylist.Clear();
+                currentPlaylist.UnplayedTracks.Clear();
+            }
+
             playbackStopped = false;
 
             if (selectedTrack != null)
@@ -514,7 +497,7 @@ namespace YoutubeRadio2016
 
                 UpdateButtons();
             }
-        }   
+        }
         private void lstVTracks_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (lstVTracks.SelectedItems.Count == 0)
@@ -538,6 +521,13 @@ namespace YoutubeRadio2016
 
         private void optAutoplay_CheckedChanged(object sender, EventArgs e)
         {
+            RadioButton senderButton = sender as RadioButton;
+
+            if (senderButton.Checked == true)
+            {
+                return;
+            }
+
             if (!optAutoplay_Off.Checked)
             {
                 if (optAutoplay_Play.Checked)
@@ -550,10 +540,10 @@ namespace YoutubeRadio2016
                 }
 
                 optRepeatOff.Checked = true;
-                optShuffle_Off.Checked = true;                
+                optShuffle_Off.Checked = true;
 
 
-                if (waveOut != null)
+                if (waveOut != null && string.IsNullOrEmpty(videoUrlAutoplayTrack))
                 {
                     ShowAutoplayPreview();
                 }
@@ -561,7 +551,7 @@ namespace YoutubeRadio2016
             else
             {
                 settings.Autoplay = Autoplay.Off;
-
+                videoUrlAutoplayTrack = null;
                 lblNextSong.Visible = false;
             }
 
@@ -655,11 +645,6 @@ namespace YoutubeRadio2016
 
                         autoplayTrack.ForeColor = Color.DarkBlue;
                         autoplayTrack.Font = new Font(autoplayTrack.Font, FontStyle.Bold);
-
-                        currentPlaylist.UnplayedTracks = new List<AudioTrack>();
-                        currentPlaylist.ShuffledPlaylist = new List<AudioTrack>();
-
-                        currentPlaylist.UnplayedTracks.AddRange(currentPlaylist.SortedPlaylist);
                     }
                     else
                     {
@@ -671,11 +656,6 @@ namespace YoutubeRadio2016
                         }
 
                         tmrPlayTrack.Stop();
-
-                        currentPlaylist.UnplayedTracks = new List<AudioTrack>();
-                        currentPlaylist.ShuffledPlaylist = new List<AudioTrack>();
-
-                        currentPlaylist.UnplayedTracks.AddRange(currentPlaylist.SortedPlaylist);
 
                         cmdPlay_Click(sender, e);
                     }
@@ -695,8 +675,8 @@ namespace YoutubeRadio2016
 
                 if(currentPlaylist != null)
                 {
-                    currentPlaylist.UnplayedTracks = null;
-                    currentPlaylist.ShuffledPlaylist = null;
+                    currentPlaylist.UnplayedTracks.Clear();
+                    currentPlaylist.ShuffledPlaylist.Clear();
 
                     foreach (AudioTrack track in currentPlaylist.SortedPlaylist)
                     {
@@ -719,6 +699,7 @@ namespace YoutubeRadio2016
                 StopPlayback();
                 ClearListViewTracks();
                 currentPlaylist.ClearAudioTracks();
+                currentPlaylist.VideoUrls.Clear();
 
                 if(!currentPlaylistChanged)
                 {
@@ -773,6 +754,12 @@ namespace YoutubeRadio2016
                 }
             }
 
+            if (!playbackStopped)
+            {
+                StopPlayback();
+                ClearListViewTracks();
+            }
+
             frmNewPlaylist formNewPlaylist = new frmNewPlaylist(this);
 
             formNewPlaylist.ShowDialog();
@@ -795,7 +782,7 @@ namespace YoutubeRadio2016
                     Text = "YoutubeRadio - (Keine Playlist)";
                     txtPlaylistName.Text = "(Keine Playlist)";
 
-                    settings.LastUsedPlaylist = null;
+                    settings.FilepathLastUsedPlaylist = null;
                     currentPlaylistChanged = false;
                     PlaylistManager.CurrentPlaylist = null;
                     currentPlaylist = null;
@@ -870,9 +857,9 @@ namespace YoutubeRadio2016
 
             PlaylistManager.SerializePlaylist();
 
-            MessageBox.Show(
-                "Die Playlist wurde erfolgreich gespeichert!", "Playlist gespeichert!",
-                MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1);
+            //MessageBox.Show(
+            //    "Die Playlist wurde erfolgreich gespeichert!", "Playlist gespeichert!",
+            //    MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1);
 
             currentPlaylistChanged = false;
             txtPlaylistName.Text = currentPlaylist.Name;
@@ -906,8 +893,17 @@ namespace YoutubeRadio2016
             {
                 tmrPlayTrack.Stop();
 
-                ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrl: videoUrlAutoplayTrack));
-                PlayTrack(currentTrack);
+                ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrlAutoplayTrack));
+
+                if (!playbackStopped)
+                {
+                    PlayTrack(currentTrack);
+
+                    if (settings.Autoplay != Autoplay.Off)
+                    {
+                        ShowAutoplayPreview();
+                    }
+                }
             }
             else if(!trackBarSeeking)
             {
@@ -1020,8 +1016,7 @@ namespace YoutubeRadio2016
 
             Text = "YoutubeRadio - " + playlistName + "*";
             txtPlaylistName.Text = playlistName + "*";
-
-            ClearListViewTracks();
+            
             UpdateButtons();
         }
         public void ApplyPlaylistName(string playlistName)
@@ -1049,7 +1044,7 @@ namespace YoutubeRadio2016
             playbackStopped = true;
 
             UpdateButtons();
-        }  
+        }
 
         private void AddNewAutoplayTrack(AudioTrack pickedTrack)
         {
@@ -1080,19 +1075,63 @@ namespace YoutubeRadio2016
         }   
         private void ChangeTrack(AudioTrack pickedTrack)
         {
-            if(pickedTrack.IsAutoplayTrack && currentTrack != null && !currentTrack.Equals(pickedTrack))
+            if (currentTrack != null && currentTrack.Equals(pickedTrack))
             {
-                AddNewAutoplayTrack(pickedTrack);
+                UpdateTrackbar();
+                return;
             }
 
-            SwitchTrackHighlighting(pickedTrack);
+            if (currentTrack != null && currentTrack.IsAutoplayTrack)
+            {
+                if (settings.Autoplay == Autoplay.Load)
+                {
+                    CarryAutoplayTrackIntoPlaylist(lstVTracks.Items.Count - 1);
+                }
+                else if (settings.Autoplay == Autoplay.Play || settings.Autoplay == Autoplay.Off)
+                {
+                    RemoveAutoplayTrack(currentTrack.IndexSortedList);
 
-            ListViewItem itemAfterChange = lstVTracks.Items[pickedTrack.IndexSortedList];
+                    if (pickedTrack.IsAutoplayTrack)
+                    {
+                        pickedTrack.IndexSortedList--;
+                    }
+                }
+            }
 
-            lstVTracks.Items[itemAfterChange.Index].EnsureVisible();
-            currentPlaylist.CurrentTrack = pickedTrack;
-            currentTrack = currentPlaylist.CurrentTrack;
-            UpdateTrackbar();
+            if (pickedTrack != null)
+            {
+                if (pickedTrack.IsAutoplayTrack &&
+                    (currentTrack != null && !currentTrack.Equals(pickedTrack) || currentTrack == null))
+                {
+                    AddNewAutoplayTrack(pickedTrack);
+                }
+
+                SwitchTrackHighlighting(pickedTrack);
+
+                ListViewItem itemAfterChange = lstVTracks.Items[pickedTrack.IndexSortedList];
+
+                lstVTracks.Items[itemAfterChange.Index].EnsureVisible();
+                currentPlaylist.CurrentTrack = pickedTrack;
+                currentTrack = currentPlaylist.CurrentTrack;
+                UpdateTrackbar();
+            }
+            else
+            {
+                StopPlayback();
+
+                ListViewItem lastPlayedTrack = lstVTracks.Items[currentTrack.IndexSortedList];
+                
+                lastPlayedTrack.ForeColor = Color.FromName("WindowText");
+                lastPlayedTrack.Font = new Font(lastPlayedTrack.Font, FontStyle.Regular);
+
+                currentPlaylist.CurrentTrack = GetPlaylistsFirstTrack();
+                currentTrack = currentPlaylist.CurrentTrack;
+
+                ListViewItem firstTrack = lstVTracks.Items[currentTrack.IndexSortedList];
+
+                firstTrack.ForeColor = Color.DarkBlue;
+                firstTrack.Font = new Font(firstTrack.Font, FontStyle.Bold);
+            }
         }  
         private void CheckSettings(Settings settings)
         {
@@ -1181,18 +1220,20 @@ namespace YoutubeRadio2016
 
             trkBDuration.Value = (int)value;
         }  
-        private void GetCurrentPlaylist(string filename)
+        private void GetCurrentPlaylist(string filepath)
         {
-            if (!string.IsNullOrEmpty(filename) && File.Exists(filename))
+            string filename = Path.GetFileName(filepath);
+
+            if (!string.IsNullOrEmpty(filepath) && File.Exists(filepath))
             {
                 PlaylistManager.CurrentPlaylist = PlaylistManager.SavedPlaylists.Find(x => x.Filename == filename);
                 currentPlaylist = PlaylistManager.CurrentPlaylist;
 
                 LoadTracks(currentPlaylist.VideoUrls);
             }
-            else if(!string.IsNullOrEmpty(filename) && !File.Exists(filename))
+            else if(!string.IsNullOrEmpty(filepath) && !File.Exists(filepath))
             {
-                string shortFilename = Path.GetFileNameWithoutExtension(filename);
+                string shortFilename = Path.GetFileNameWithoutExtension(filepath);
 
                 DialogResult dialogResult = MessageBox.Show(
                     "Die Playlist \"" + shortFilename + "\" wurde nicht gefunden!\n" +
@@ -1205,14 +1246,14 @@ namespace YoutubeRadio2016
 
                     PlaylistManager.RemovePlaylist(playlistToRemove);
 
-                    int indexPlaylistToRemove = lstBoxPlaylists.Items.IndexOf(filename);
+                    int indexPlaylistToRemove = lstBoxPlaylists.Items.IndexOf(shortFilename);
 
                     lstBoxPlaylists.Items.RemoveAt(playlistToRemove.Index);
 
                     Text = "YoutubeRadio - (Keine Playlist)";
                     txtPlaylistName.Text = "(Keine Playlist)";
 
-                    settings.LastUsedPlaylist = null;
+                    settings.FilepathLastUsedPlaylist = null;
                     currentPlaylistChanged = false;
                     PlaylistManager.CurrentPlaylist = null;
                     currentPlaylist = null;
@@ -1232,7 +1273,18 @@ namespace YoutubeRadio2016
 
             foreach (string videoUrl in videoUrls)
             {
-                itemsToAdd.Add(CreateAudioTrack(videoUrl, lstVTracks.Items.Count));
+                ListViewItem itemToAdd = CreateAudioTrack(videoUrl, lstVTracks.Items.Count);
+
+                if(itemToAdd != null)
+                {
+                    itemsToAdd.Add(itemToAdd);
+                }
+            }
+
+            if (videoUrls.Count != itemsToAdd.Count)
+            {
+                MessageBox.Show("Einige Videos konnten nicht geladen werden!", "Fehler",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1);
             }
 
             prgLoadTracks.Visible = false;
@@ -1263,7 +1315,7 @@ namespace YoutubeRadio2016
                         currentPlaylist.RemoveAudioTrack(currentTrack, settings.Shuffle);
                     }
 
-                    ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrl: videoUrlAutoplayTrack));
+                    ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrlAutoplayTrack));
                 }
                 else
                 {
@@ -1279,7 +1331,7 @@ namespace YoutubeRadio2016
 
                 if (lstVTracks.Items.Count > 1)
                 {
-                    ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrl: videoUrlAutoplayTrack));
+                    ChangeTrack(AudioPlayer.GetNextTrack(false, settings, videoUrlAutoplayTrack));
                 }
                 else
                 {
@@ -1306,6 +1358,11 @@ namespace YoutubeRadio2016
         {
             videoUrlAutoplayTrack = TrackFactory.GetVideoUrlAutoplayTrack(currentTrack);
 
+            while (videoUrlAutoplayTrack == null)
+            {
+                videoUrlAutoplayTrack = TrackFactory.GetVideoUrlAutoplayTrack(currentTrack);
+            }
+
             var doc = new HtmlWeb().Load(videoUrlAutoplayTrack);
             string title = doc.DocumentNode.SelectSingleNode("//title").InnerText;
             string endIndicatorTitle = " - YouTube";
@@ -1325,18 +1382,7 @@ namespace YoutubeRadio2016
         }
         private void SwitchTrackHighlighting(AudioTrack trackAfterChange)
         {
-            if (currentTrack != null && currentTrack.IsAutoplayTrack && !currentTrack.Equals(trackAfterChange))
-            {
-                if(settings.Autoplay == Autoplay.Play || settings.Autoplay == Autoplay.Off)
-                {
-                    RemoveAutoplayTrack(currentTrack.IndexSortedList);
-                }
-                else
-                {
-                    CarryAutoplayTrackIntoPlaylist(currentTrack.IndexSortedList);
-                }
-            }
-            else if (currentTrack != null && !currentTrack.Equals(trackAfterChange))
+            if (currentTrack != null && !currentTrack.Equals(trackAfterChange))
             {
                 ListViewItem itemBeforeChange = lstVTracks.Items[currentTrack.IndexSortedList];
 
@@ -1406,6 +1452,7 @@ namespace YoutubeRadio2016
             else
             {
                 PlaylistManager.UpdateSavedPlaylist(currentPlaylist);
+                lstBoxPlaylists.Items[currentPlaylist.Index] = currentPlaylist.Name;
             }
 
             string filepath = Path.Combine(PlaylistManager.directory, currentPlaylist.Filename);
@@ -1498,7 +1545,19 @@ namespace YoutubeRadio2016
 
             if (settings.Shuffle)
             {
-                AudioPlayer.GetRandomTrack(out trackToPlay);
+                if(currentPlaylist.ShuffledPlaylist.Count == 0)
+                {
+                    if (currentPlaylist.UnplayedTracks.Count == 0)
+                    {
+                        currentPlaylist.UnplayedTracks.AddRange(currentPlaylist.SortedPlaylist);
+                    }
+
+                    AudioPlayer.GetRandomTrack(out trackToPlay);
+                }
+                else
+                {
+                    trackToPlay = currentPlaylist.ShuffledPlaylist[0];
+                }
             }
             else
             {
@@ -1525,28 +1584,23 @@ namespace YoutubeRadio2016
 
         private bool PreviousTrackAvailable()
         {
-            return currentPlaylist != null && currentPlaylist.SortedPlaylist.Count > 1;
+
+            if (currentPlaylist == null || currentPlaylist.SortedPlaylist.Count < 2)
+            {
+                return false;
+            }
+
+            if (settings.Autoplay != Autoplay.Off && !playbackStopped)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private bool YoutubeViewAvailable()
         {
             return currentTrack != null || selectedTrack != null;
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     }
 }
